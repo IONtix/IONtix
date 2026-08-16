@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -19,50 +20,61 @@ export default function LoginPage() {
     setIsLoading(true);
     setErrorMsg("");
 
-    // Autentikasi menggunakan NextAuth Credentials Provider
-    const result = await signIn("credentials", {
-      email,
-      password,
-      redirect: false,
-    });
+    try {
+      const result = await signIn("credentials", {
+        email,
+        password,
+        redirect: false,
+      });
 
-    if (result?.error) {
-      setErrorMsg("Email atau kata sandi salah. Silakan periksa kembali.");
-      setIsLoading(false);
-    } else {
-      // Jika berhasil login, langsung arahkan ke Dashboard
+      if (result?.error) {
+        setErrorMsg("Email atau kata sandi salah. Silakan periksa kembali.");
+        return;
+      }
+
       router.push("/dashboard");
       router.refresh();
+    } catch {
+      setErrorMsg(
+        "Terjadi kesalahan saat menghubungi server. Silakan coba lagi.",
+      );
+    } finally {
+      setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col md:flex-row selection:bg-[#F57C00] selection:text-white">
+    <div className="flex min-h-screen flex-col bg-background selection:bg-[#F57C00] selection:text-white md:flex-row">
       {/* BAGIAN KIRI: Area Formulir Login */}
-      <div className="flex-1 flex flex-col justify-center px-6 sm:px-12 lg:px-24 xl:px-32 relative py-12 md:py-0">
+      <div className="relative flex flex-1 flex-col justify-center px-6 py-12 sm:px-12 lg:px-24 xl:px-32 md:py-0">
         {/* Tombol Kembali ke Beranda */}
-        <div className="absolute top-6 left-6 sm:top-8 sm:left-12 lg:left-24 xl:left-32">
+        <div className="absolute left-6 top-6 sm:left-12 sm:top-8 lg:left-24 xl:left-32">
           <Link
             href="/"
-            className="text-sm font-medium text-muted-foreground hover:text-[#0B1B3D] transition-colors flex items-center gap-2"
+            className="flex items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-[#0B1B3D]"
           >
             ← Kembali
           </Link>
         </div>
 
-        <div className="max-w-md w-full mx-auto space-y-8 mt-12 md:mt-0">
+        <div className="mx-auto mt-12 w-full max-w-md space-y-8 md:mt-0">
           {/* Logo & Judul */}
           <div className="space-y-6">
-            <img
+            <Image
               src="/logo.png"
               alt="IONtix Logo"
-              className="h-10 sm:h-12 w-auto object-contain"
+              width={160}
+              height={48}
+              priority
+              className="h-10 w-auto object-contain sm:h-12"
             />
+
             <div>
-              <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-[#0B1B3D]">
+              <h1 className="text-3xl font-black tracking-tight text-[#0B1B3D] sm:text-4xl">
                 Masuk Portal EO
               </h1>
-              <p className="text-muted-foreground mt-2 text-sm sm:text-base leading-relaxed">
+
+              <p className="mt-2 text-sm leading-relaxed text-muted-foreground sm:text-base">
                 Kelola event lari Anda, pantau transaksi, dan akses analitik
                 secara real-time.
               </p>
@@ -72,7 +84,7 @@ export default function LoginPage() {
           {/* Formulir Login */}
           <form onSubmit={handleSubmit} className="space-y-5">
             {errorMsg && (
-              <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-600 rounded-xl text-sm font-medium">
+              <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm font-medium text-red-600">
                 {errorMsg}
               </div>
             )}
@@ -81,10 +93,11 @@ export default function LoginPage() {
               <label className="text-sm font-bold text-foreground">
                 Email Perusahaan
               </label>
+
               <input
                 type="email"
                 placeholder="eo@perusahaan.com"
-                className="w-full px-4 py-3.5 rounded-xl border border-border/80 bg-muted/30 focus:bg-background focus:ring-2 focus:ring-[#F57C00]/20 focus:border-[#F57C00] outline-none transition-all text-sm"
+                className="w-full rounded-xl border border-border/80 bg-muted/30 px-4 py-3.5 text-sm outline-none transition-all focus:border-[#F57C00] focus:bg-background focus:ring-2 focus:ring-[#F57C00]/20"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -96,17 +109,19 @@ export default function LoginPage() {
                 <label className="text-sm font-bold text-foreground">
                   Kata Sandi
                 </label>
+
                 <Link
                   href="/forgot-password"
-                  className="text-xs font-bold text-[#F57C00] hover:text-[#E65100] transition-colors"
+                  className="text-xs font-bold text-[#F57C00] transition-colors hover:text-[#E65100]"
                 >
                   Lupa sandi?
                 </Link>
               </div>
+
               <input
                 type="password"
                 placeholder="••••••••"
-                className="w-full px-4 py-3.5 rounded-xl border border-border/80 bg-muted/30 focus:bg-background focus:ring-2 focus:ring-[#F57C00]/20 focus:border-[#F57C00] outline-none transition-all text-sm"
+                className="w-full rounded-xl border border-border/80 bg-muted/30 px-4 py-3.5 text-sm outline-none transition-all focus:border-[#F57C00] focus:bg-background focus:ring-2 focus:ring-[#F57C00]/20"
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -117,7 +132,7 @@ export default function LoginPage() {
               <Button
                 type="submit"
                 disabled={isLoading}
-                className="w-full py-6 rounded-xl font-bold text-base bg-[#0B1B3D] hover:bg-[#0B1B3D]/90 text-white shadow-xl shadow-[#0B1B3D]/10 hover:scale-[1.01] active:scale-[0.99] transition-all disabled:opacity-70 disabled:cursor-not-allowed"
+                className="w-full rounded-xl bg-[#0B1B3D] py-6 text-base font-bold text-white shadow-xl shadow-[#0B1B3D]/10 transition-all hover:scale-[1.01] hover:bg-[#0B1B3D]/90 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-70"
               >
                 {isLoading ? "Memverifikasi..." : "Masuk ke Dashboard 🔐"}
               </Button>
@@ -125,11 +140,11 @@ export default function LoginPage() {
           </form>
 
           {/* Tautan Pendaftaran */}
-          <p className="text-center text-sm text-muted-foreground pt-4 border-t border-border/50">
+          <p className="border-t border-border/50 pt-4 text-center text-sm text-muted-foreground">
             Belum menjadi Mitra EO?{" "}
             <Link
               href="/register"
-              className="font-black text-[#F57C00] hover:text-[#E65100] transition-colors"
+              className="font-black text-[#F57C00] transition-colors hover:text-[#E65100]"
             >
               Ajukan Kemitraan
             </Link>
@@ -138,27 +153,32 @@ export default function LoginPage() {
       </div>
 
       {/* BAGIAN KANAN */}
-      <div className="hidden md:flex flex-1 relative bg-[#0B1B3D] items-center justify-center p-12 lg:p-20 overflow-hidden">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-[#F57C00]/20 blur-[120px] rounded-full pointer-events-none" />
-        <div className="absolute bottom-0 left-0 w-96 h-96 bg-blue-500/20 blur-[100px] rounded-full pointer-events-none" />
+      <div className="relative hidden flex-1 items-center justify-center overflow-hidden bg-[#0B1B3D] p-12 md:flex lg:p-20">
+        <div className="pointer-events-none absolute right-0 top-0 h-96 w-96 rounded-full bg-[#F57C00]/20 blur-[120px]" />
+        <div className="pointer-events-none absolute bottom-0 left-0 h-96 w-96 rounded-full bg-blue-500/20 blur-[100px]" />
 
-        <div className="relative z-10 max-w-lg text-white space-y-8">
-          <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-md border border-white/20 px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest text-[#F57C00]">
+        <div className="relative z-10 max-w-lg space-y-8 text-white">
+          <div className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-1.5 text-xs font-bold uppercase tracking-widest text-[#F57C00] backdrop-blur-md">
             Testimoni Mitra
           </div>
-          <h2 className="text-3xl lg:text-4xl font-black leading-[1.2] tracking-tight">
-            &quot;Teknologi IONtix membuat sistem pendaftaran kami lebih cepat, dan
-            QR Check-in mereka luar biasa lancar saat hari H perlombaan.&quot;
+
+          <h2 className="text-3xl font-black leading-[1.2] tracking-tight lg:text-4xl">
+            &quot;Teknologi IONtix membuat sistem pendaftaran kami lebih cepat,
+            dan QR Check-in mereka luar biasa lancar saat hari H
+            perlombaan.&quot;
           </h2>
+
           <div className="flex items-center gap-4 pt-2">
-            <div className="w-14 h-14 bg-white/10 rounded-full flex items-center justify-center font-black text-xl backdrop-blur-sm border border-white/20 shadow-lg text-[#F57C00]">
+            <div className="flex h-14 w-14 items-center justify-center rounded-full border border-white/20 bg-white/10 text-xl font-black text-[#F57C00] shadow-lg backdrop-blur-sm">
               NR
             </div>
+
             <div>
-              <p className="font-bold text-lg leading-tight">
+              <p className="text-lg font-bold leading-tight">
                 Nusantara Run Official
               </p>
-              <p className="text-sm text-zinc-400 mt-0.5">
+
+              <p className="mt-0.5 text-sm text-zinc-400">
                 Penyelenggara Event Lari Nasional
               </p>
             </div>

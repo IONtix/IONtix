@@ -1,9 +1,10 @@
 "use client";
 
+import Image from "next/image";
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { signOut } from "next-auth/react"; // 👈 DITAMBAHKAN: Import fungsi signOut
+import { signOut } from "next-auth/react";
 import {
   LayoutDashboard,
   CalendarDays,
@@ -27,12 +28,10 @@ export default function DashboardLayout({
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // Fungsi untuk Logout
   const handleLogout = async () => {
     await signOut({ callbackUrl: "/login" });
   };
 
-  // Definisi Menu Lengkap untuk Mitra EO
   const menuItems = [
     { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
     { name: "Manajemen Event", href: "/dashboard/events", icon: CalendarDays },
@@ -44,40 +43,40 @@ export default function DashboardLayout({
   ];
 
   return (
-    <div className="min-h-screen bg-[#050A14] flex text-slate-200 overflow-hidden font-sans">
-      {/* ========================================== */}
-      {/* SIDEBAR (DESKTOP) */}
-      {/* ========================================== */}
-      <aside className="hidden lg:flex flex-col w-72 bg-[#090F1C] border-r border-slate-800/80 z-20">
-        {/* Logo Area */}
-        <div className="h-20 flex items-center px-8 border-b border-slate-800/80">
+    <div className="flex min-h-screen overflow-hidden bg-[#050A14] font-sans text-slate-200">
+      <aside className="z-20 hidden w-72 flex-col border-r border-slate-800/80 bg-[#090F1C] lg:flex">
+        <div className="flex h-20 items-center border-b border-slate-800/80 px-8">
           <Link href="/dashboard" className="flex items-center gap-3">
-            <img
+            <Image
               src="/logo.png"
               alt="IONtix"
-              className="h-7 w-auto brightness-200"
+              width={160}
+              height={48}
+              priority
+              className="h-7 w-auto object-contain brightness-200"
             />
-            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#F57C00] bg-[#F57C00]/10 px-2 py-1 rounded border border-[#F57C00]/20">
+            <span className="rounded border border-[#F57C00]/20 bg-[#F57C00]/10 px-2 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-[#F57C00]">
               EO PANEL
             </span>
           </Link>
         </div>
 
-        {/* Menu Navigasi */}
-        <div className="flex-1 overflow-y-auto py-6 px-4 space-y-1.5 scrollbar-hide">
-          <p className="px-4 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 mb-4">
+        <div className="scrollbar-hide flex-1 space-y-1.5 overflow-y-auto px-4 py-6">
+          <p className="mb-4 px-4 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
             Menu Utama
           </p>
+
           {menuItems.map((item) => {
             const isActive = pathname === item.href;
             const Icon = item.icon;
+
             return (
               <Link
                 key={item.name}
                 href={item.href}
-                className={`flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all duration-300 group ${
+                className={`group flex items-center gap-3 rounded-xl px-4 py-3.5 transition-all duration-300 ${
                   isActive
-                    ? "bg-linear-to-r from-[#F57C00]/10 to-transparent border-l-2 border-[#F57C00] text-white"
+                    ? "border-l-2 border-[#F57C00] bg-gradient-to-r from-[#F57C00]/10 to-transparent text-white"
                     : "text-slate-400 hover:bg-slate-800/50 hover:text-slate-200"
                 }`}
               >
@@ -86,7 +85,7 @@ export default function DashboardLayout({
                   className={
                     isActive
                       ? "text-[#F57C00]"
-                      : "text-slate-500 group-hover:text-slate-300 transition-colors"
+                      : "text-slate-500 transition-colors group-hover:text-slate-300"
                   }
                 />
                 <span
@@ -99,83 +98,96 @@ export default function DashboardLayout({
           })}
         </div>
 
-        {/* User Profile Mini (Bottom Sidebar) */}
-        <div className="p-4 border-t border-slate-800/80 bg-[#090F1C]">
-          {/* 👇 PERBAIKAN: Menambahkan onClick handleLogout ke kotak profil ini */}
-          <div
+        <div className="border-t border-slate-800/80 bg-[#090F1C] p-4">
+          <button
+            type="button"
             onClick={handleLogout}
-            className="flex items-center gap-3 p-3 rounded-xl bg-slate-900 border border-slate-800 cursor-pointer hover:border-red-900/50 hover:bg-red-950/20 transition-all group"
+            className="group flex w-full items-center gap-3 rounded-xl border border-slate-800 bg-slate-900 p-3 text-left transition-all hover:border-red-900/50 hover:bg-red-950/20"
           >
-            <div className="w-10 h-10 rounded-full bg-linear-to-br from-[#F57C00] to-amber-600 flex items-center justify-center text-white font-black text-sm shadow-md">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#F57C00] to-amber-600 text-sm font-black text-white shadow-md">
               EO
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-bold text-white truncate group-hover:text-red-400 transition-colors">
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-bold text-white transition-colors group-hover:text-red-400">
                 Mitra EO Resmi
               </p>
-              <p className="text-[10px] text-slate-400 truncate">
+              <p className="truncate text-[10px] text-slate-400">
                 admin@eo-mitra.com
               </p>
             </div>
             <LogOut
               size={16}
-              className="text-slate-500 group-hover:text-red-500 transition-colors"
+              className="shrink-0 text-slate-500 transition-colors group-hover:text-red-500"
             />
-          </div>
+          </button>
         </div>
       </aside>
 
-      {/* ========================================== */}
-      {/* MOBILE HEADER & OVERLAY SIDEBAR */}
-      {/* ========================================== */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 h-16 bg-[#090F1C]/90 backdrop-blur-md border-b border-slate-800/80 flex items-center justify-between px-4 z-50">
+      <div className="fixed left-0 right-0 top-0 z-50 flex h-16 items-center justify-between border-b border-slate-800/80 bg-[#090F1C]/90 px-4 backdrop-blur-md lg:hidden">
         <div className="flex items-center gap-3">
           <button
+            type="button"
             onClick={() => setIsMobileMenuOpen(true)}
-            className="p-2 -ml-2 text-slate-300 hover:text-white"
+            className="-ml-2 p-2 text-slate-300 hover:text-white"
+            aria-label="Buka menu"
           >
             <Menu size={24} />
           </button>
-          <img src="/logo.png" alt="IONtix" className="h-5 brightness-200" />
+
+          <Image
+            src="/logo.png"
+            alt="IONtix"
+            width={120}
+            height={36}
+            priority
+            className="h-5 w-auto object-contain brightness-200"
+          />
         </div>
-        <div className="w-8 h-8 rounded-full bg-linear-to-br from-[#F57C00] to-amber-600 flex items-center justify-center text-white font-bold text-xs">
+
+        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-[#F57C00] to-amber-600 text-xs font-bold text-white">
           EO
         </div>
       </div>
 
-      {/* Mobile Menu Backdrop */}
       {isMobileMenuOpen && (
         <div
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 lg:hidden"
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm lg:hidden"
           onClick={() => setIsMobileMenuOpen(false)}
+          aria-hidden="true"
         />
       )}
 
-      {/* Mobile Sidebar */}
       <div
-        className={`fixed inset-y-0 left-0 w-72 bg-[#090F1C] border-r border-slate-800/80 z-50 transform transition-transform duration-300 ease-in-out lg:hidden flex flex-col ${isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"}`}
+        className={`fixed inset-y-0 left-0 z-50 flex w-72 transform flex-col border-r border-slate-800/80 bg-[#090F1C] transition-transform duration-300 ease-in-out lg:hidden ${
+          isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
       >
-        <div className="h-16 flex items-center justify-between px-6 border-b border-slate-800/80 shrink-0">
-          <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#F57C00] bg-[#F57C00]/10 px-2 py-1 rounded border border-[#F57C00]/20">
+        <div className="flex h-16 shrink-0 items-center justify-between border-b border-slate-800/80 px-6">
+          <span className="rounded border border-[#F57C00]/20 bg-[#F57C00]/10 px-2 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-[#F57C00]">
             EO PANEL
           </span>
+
           <button
+            type="button"
             onClick={() => setIsMobileMenuOpen(false)}
             className="text-slate-400 hover:text-white"
+            aria-label="Tutup menu"
           >
             <X size={20} />
           </button>
         </div>
-        <div className="py-4 px-3 space-y-1 flex-1 overflow-y-auto">
+
+        <div className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
           {menuItems.map((item) => {
             const isActive = pathname === item.href;
             const Icon = item.icon;
+
             return (
               <Link
                 key={item.name}
                 href={item.href}
                 onClick={() => setIsMobileMenuOpen(false)}
-                className={`flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all ${
+                className={`flex items-center gap-3 rounded-xl px-4 py-3.5 transition-all ${
                   isActive
                     ? "bg-[#F57C00]/10 text-white"
                     : "text-slate-400 hover:bg-slate-800"
@@ -191,11 +203,11 @@ export default function DashboardLayout({
           })}
         </div>
 
-        {/* 👇 DITAMBAHKAN: Tombol Log Out khusus untuk tampilan Mobile */}
-        <div className="p-4 border-t border-slate-800/80">
+        <div className="border-t border-slate-800/80 p-4">
           <button
+            type="button"
             onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-slate-400 hover:bg-red-950/30 hover:text-red-400 transition-all font-bold text-sm"
+            className="flex w-full items-center gap-3 rounded-xl px-4 py-3.5 text-left text-sm font-bold text-slate-400 transition-all hover:bg-red-950/30 hover:text-red-400"
           >
             <LogOut size={18} />
             <span>Keluar Sistem</span>
@@ -203,14 +215,10 @@ export default function DashboardLayout({
         </div>
       </div>
 
-      {/* ========================================== */}
-      {/* MAIN CONTENT AREA */}
-      {/* ========================================== */}
-      <main className="flex-1 flex flex-col h-screen overflow-hidden bg-[#050A14]">
-        {/* Desktop Topbar */}
-        <header className="hidden lg:flex h-20 items-center justify-between px-8 bg-[#050A14] border-b border-slate-800/60 z-10 sticky top-0">
+      <main className="flex h-screen flex-1 flex-col overflow-hidden bg-[#050A14]">
+        <header className="sticky top-0 z-10 hidden h-20 items-center justify-between border-b border-slate-800/60 bg-[#050A14] px-8 lg:flex">
           <div className="flex items-center gap-4">
-            <h1 className="text-xl font-black text-white capitalize tracking-wide">
+            <h1 className="text-xl font-black capitalize tracking-wide text-white">
               {pathname === "/dashboard"
                 ? "Dashboard Overview"
                 : pathname.split("/").pop()?.replace("-", " ")}
@@ -218,33 +226,33 @@ export default function DashboardLayout({
           </div>
 
           <div className="flex items-center gap-6">
-            {/* Notification Bell */}
-            <button className="relative p-2 text-slate-400 hover:text-white transition-colors">
+            <button
+              type="button"
+              className="relative p-2 text-slate-400 transition-colors hover:text-white"
+              aria-label="Notifikasi"
+            >
               <Bell size={20} />
-              <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 border-2 border-[#050A14] rounded-full animate-pulse" />
+              <span className="absolute right-1 top-1 h-2.5 w-2.5 animate-pulse rounded-full border-2 border-[#050A14] bg-red-500" />
             </button>
 
-            {/* Topbar Profile */}
-            <div className="flex items-center gap-3 pl-6 border-l border-slate-800/80 cursor-pointer group">
+            <div className="group flex cursor-pointer items-center gap-3 border-l border-slate-800/80 pl-6">
               <div className="text-right">
                 <p className="text-sm font-bold text-white">Mitra EO</p>
                 <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-400">
                   Terverifikasi
                 </p>
               </div>
+
               <ChevronDown
                 size={16}
-                className="text-slate-500 group-hover:text-white transition-colors"
+                className="text-slate-500 transition-colors group-hover:text-white"
               />
             </div>
           </div>
         </header>
 
-        {/* Dynamic Content injected here */}
-        <div className="flex-1 overflow-y-auto p-4 lg:p-8 pt-24 lg:pt-8 scrollbar-hide relative">
-          {/* Subtle Glow Background Effect in content area */}
-          <div className="absolute top-0 right-0 w-96 h-96 bg-[#F57C00]/5 blur-[120px] rounded-full pointer-events-none -z-10" />
-
+        <div className="scrollbar-hide relative flex-1 overflow-y-auto p-4 pt-24 lg:p-8 lg:pt-8">
+          <div className="pointer-events-none absolute right-0 top-0 -z-10 h-96 w-96 rounded-full bg-[#F57C00]/5 blur-[120px]" />
           {children}
         </div>
       </main>

@@ -25,7 +25,11 @@ import {
   Building,
 } from "lucide-react";
 import { createEvent, updateEvent } from "../../../../actions/event";
-import type { EventFormInitialData, FormFieldValue, JsonObject } from "@/lib/platform-types";
+import type {
+  EventFormInitialData,
+  FormFieldValue,
+  JsonObject,
+} from "@/lib/platform-types";
 import Image from "next/image";
 
 export interface TicketData {
@@ -80,9 +84,7 @@ export default function EventFormLari({
     name: initialData?.title || initialData?.name || "",
     category: initialData?.category || "Lari / Maraton",
     startDate: initialStartDate
-      ? new Date(initialStartDate)
-          .toISOString()
-          .slice(0, 16)
+      ? new Date(initialStartDate).toISOString().slice(0, 16)
       : "",
     endDate: initialData?.endDate
       ? new Date(initialData.endDate).toISOString().slice(0, 16)
@@ -428,7 +430,11 @@ export default function EventFormLari({
       },
     ]);
   };
-  const updateAddon = (id: string, field: keyof AddonModule, value: FormFieldValue) => {
+  const updateAddon = (
+    id: string,
+    field: keyof AddonModule,
+    value: FormFieldValue,
+  ) => {
     setAddons(addons.map((a) => (a.id === id ? { ...a, [field]: value } : a)));
   };
   const removeAddon = (id: string) =>
@@ -469,7 +475,9 @@ export default function EventFormLari({
       );
       router.refresh();
     } catch (error: unknown) {
-      alert(`Terjadi kesalahan: ${error instanceof Error ? error.message : "Terjadi kesalahan"}`);
+      alert(
+        `Terjadi kesalahan: ${error instanceof Error ? error.message : "Terjadi kesalahan"}`,
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -1256,10 +1264,12 @@ export default function EventFormLari({
                       <div className="flex items-center gap-4">
                         {addon.imageUrl ? (
                           <div className="w-24 h-24 rounded-xl overflow-hidden border-2 border-indigo-200 relative group">
-                            <img
+                            <Image
                               src={addon.imageUrl}
-                              className="w-full h-full object-cover"
-                              alt="preview"
+                              alt="Preview gambar addon"
+                              fill
+                              sizes="96px"
+                              className="object-cover"
                             />
                             <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all">
                               <label className="cursor-pointer text-white">

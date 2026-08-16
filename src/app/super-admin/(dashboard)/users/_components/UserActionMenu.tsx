@@ -113,14 +113,6 @@ export default function UserActionMenu({ user }: { user: SuperAdminUser }) {
     setIsEditModalOpen(true);
   };
 
-  const closeAllModals = () => {
-    if (isLoading) return;
-
-    setIsEditModalOpen(false);
-    setIsStatusModalOpen(false);
-    setIsDeleteModalOpen(false);
-  };
-
   const handleEditSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setIsLoading(true);
