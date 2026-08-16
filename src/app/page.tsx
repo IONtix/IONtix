@@ -296,10 +296,10 @@ export default async function HomePage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {events.map((event: any) => {
+              {events.map((event) => {
                 const lowestPrice =
                   event.categories?.length > 0
-                    ? Math.min(...event.categories.map((c: any) => c.price))
+                    ? Math.min(...event.categories.map((c) => c.price))
                     : 0;
 
                 const formattedDate = new Date(event.date).toLocaleDateString(

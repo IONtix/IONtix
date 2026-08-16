@@ -1,6 +1,8 @@
 "use client";
 
 import { processCheckout } from "@/app/actions/checkout";
+import Image from "next/image";
+import type { CheckoutAddonData, CheckoutEventData, CheckoutTicketData, CustomFieldDefinition } from "@/lib/platform-types";
 import React, { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -11,22 +13,20 @@ import {
   MapPin,
   Calendar,
   Receipt,
-  ShieldCheck,
   ImageIcon,
   Plus,
   Minus,
   ArrowRight,
   ArrowLeft,
   QrCode,
-  Building,
   Package, // <-- Icon baru untuk Addons
 } from "lucide-react";
 
 interface CheckoutFormClientProps {
-  event: any;
-  tickets: any[];
-  addons?: any[]; // <-- BARU: Tambahkan props addons (opsional agar aman)
-  customFields: any[];
+  event: CheckoutEventData;
+  tickets: CheckoutTicketData[];
+  addons?: CheckoutAddonData[];
+  customFields: CustomFieldDefinition[];
 }
 
 // Tipe Data Peserta
@@ -196,7 +196,7 @@ export default function CheckoutFormClient({
     setIsSubmitting(true);
     try {
       const formattedAddons = Object.entries(addonCounts)
-        .filter(([_, qty]) => qty > 0)
+        .filter((entry) => entry[1] > 0)
         .map(([addonId, quantity]) => ({ addonId, quantity }));
 
       const payload = {
@@ -208,14 +208,14 @@ export default function CheckoutFormClient({
       };
 
       // Panggil Server Action yang baru dibuat
-      const response: any = await processCheckout(payload as any);
+      const response = await processCheckout(payload);
 
       if (response.success) {
         setCurrentStep(4);
       } else {
         alert(response.error);
       }
-    } catch (error) {
+    } catch {
       alert("Terjadi kesalahan sistem. Silakan coba lagi.");
     } finally {
       setIsSubmitting(false);
@@ -236,8 +236,10 @@ export default function CheckoutFormClient({
       <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden mb-8">
         {event.imageUrl ? (
           <div className="w-full h-40 sm:h-64 relative bg-slate-100">
-            <img
+            <Image
               src={event.imageUrl}
+              width={1600}
+              height={500}
               alt="Poster"
               className="w-full h-full object-cover object-center"
             />

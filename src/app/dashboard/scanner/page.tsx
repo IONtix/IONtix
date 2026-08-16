@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import { Html5QrcodeScanner } from "html5-qrcode";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
@@ -29,39 +29,7 @@ export default function ScannerPage() {
 
   const scannerRef = useRef<Html5QrcodeScanner | null>(null);
 
-  useEffect(() => {
-    // Inisialisasi Kamera QR Scanner
-    const scanner = new Html5QrcodeScanner(
-      "reader",
-      {
-        fps: 10,
-        qrbox: { width: 250, height: 250 },
-      },
-      /* verbose= */ false,
-    );
-
-    scanner.render(
-      (decodedText) => {
-        // Ketika QR Code berhasil terbaca
-        setScanResult(decodedText);
-        fetchOrderData(decodedText);
-      },
-      (errorMessage) => {
-        // Abaikan error per frame saat scan
-      },
-    );
-
-    scannerRef.current = scanner;
-
-    return () => {
-      scanner
-        .clear()
-        .catch((error) => console.error("Failed to clear scanner", error));
-    };
-  }, []);
-
-  // Fungsi ambil data order berdasarkan ID dari QR Code
-  async function fetchOrderData(orderId: string) {
+  const fetchOrderData = useCallback(async (orderId: string) => {
     setLoading(true);
     setMessage(null);
     setOrderDetails(null);
@@ -76,14 +44,41 @@ export default function ScannerPage() {
           type: "error",
         });
       } else {
-        setOrderDetails(data);
+        setOrderDetails(data as OrderDetails);
       }
-    } catch (err) {
+    } catch {
       setMessage({ text: "Gagal menghubungkan ke server.", type: "error" });
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
+
+  useEffect(() => {
+    const scanner = new Html5QrcodeScanner(
+      "reader",
+      { fps: 10, qrbox: { width: 250, height: 250 } },
+      false,
+    );
+
+    scanner.render(
+      (decodedText) => {
+        setScanResult(decodedText);
+        void fetchOrderData(decodedText);
+      },
+      () => {
+        // Ignore per-frame scan errors.
+      },
+    );
+
+    scannerRef.current = scanner;
+
+    return () => {
+      scanner
+        .clear()
+        .catch((error) => console.error("Failed to clear scanner", error));
+      scannerRef.current = null;
+    };
+  }, [fetchOrderData]);
 
   // Fungsi konfirmasi verifikasi Racepack
   async function handleClaimRacepack() {
@@ -110,7 +105,7 @@ export default function ScannerPage() {
           type: "error",
         });
       }
-    } catch (err) {
+    } catch {
       setMessage({ text: "Terjadi kesalahan.", type: "error" });
     } finally {
       setLoading(false);

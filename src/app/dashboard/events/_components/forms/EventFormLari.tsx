@@ -25,6 +25,8 @@ import {
   Building,
 } from "lucide-react";
 import { createEvent, updateEvent } from "../../../../actions/event";
+import type { EventFormInitialData, FormFieldValue, JsonObject } from "@/lib/platform-types";
+import Image from "next/image";
 
 export interface TicketData {
   id: number | string;
@@ -55,11 +57,11 @@ export interface AddonModule {
   quota: string;
   description: string;
   imageUrl?: string | null;
-  details?: any; // Untuk data spesifik seperti ukuran baju, rute, dll
+  details?: JsonObject; // Untuk data spesifik seperti ukuran baju, rute, dll
 }
 
 interface EventFormProps {
-  initialData?: any;
+  initialData?: EventFormInitialData;
   eventId?: string | null;
 }
 
@@ -72,15 +74,16 @@ export default function EventFormLari({
   // --------------------------------------------------------------------------
   // 1. STATE EVENT
   // --------------------------------------------------------------------------
+  const initialStartDate = initialData?.startDate ?? initialData?.date;
+
   const [eventDetails, setEventDetails] = useState({
     name: initialData?.title || initialData?.name || "",
     category: initialData?.category || "Lari / Maraton",
-    startDate:
-      initialData?.startDate || initialData?.date
-        ? new Date(initialData.startDate || initialData.date)
-            .toISOString()
-            .slice(0, 16)
-        : "",
+    startDate: initialStartDate
+      ? new Date(initialStartDate)
+          .toISOString()
+          .slice(0, 16)
+      : "",
     endDate: initialData?.endDate
       ? new Date(initialData.endDate).toISOString().slice(0, 16)
       : "",
@@ -105,9 +108,19 @@ export default function EventFormLari({
   // --------------------------------------------------------------------------
   // 2. STATE TIKET & KATEGORI
   // --------------------------------------------------------------------------
+  const initialCategories = Array.isArray(initialData?.categories)
+    ? (initialData?.categories as unknown as TicketData[])
+    : [];
+  const initialCustomFields = Array.isArray(initialData?.customFields)
+    ? (initialData?.customFields as unknown as CustomField[])
+    : [];
+  const initialAddons = Array.isArray(initialData?.addons)
+    ? (initialData?.addons as unknown as AddonModule[])
+    : [];
+
   const [tickets, setTickets] = useState<TicketData[]>(
-    initialData?.categories?.length > 0
-      ? initialData.categories
+    initialCategories.length > 0
+      ? initialCategories
       : [
           {
             id: "ticket-1",
@@ -126,8 +139,8 @@ export default function EventFormLari({
   // 3. STATE CUSTOM FIELDS
   // --------------------------------------------------------------------------
   const [customFields, setCustomFields] = useState<CustomField[]>(
-    initialData?.customFields?.length > 0
-      ? initialData.customFields
+    initialCustomFields.length > 0
+      ? initialCustomFields
       : [
           {
             id: "cf-1",
@@ -153,9 +166,7 @@ export default function EventFormLari({
   // --------------------------------------------------------------------------
   // 4. STATE ADDON MODULES
   // --------------------------------------------------------------------------
-  const [addons, setAddons] = useState<AddonModule[]>(
-    initialData?.addons || [],
-  );
+  const [addons, setAddons] = useState<AddonModule[]>(initialAddons);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -171,7 +182,7 @@ export default function EventFormLari({
 
   const handleMediaUpload = (
     e: React.ChangeEvent<HTMLInputElement>,
-    setPreview: Function,
+    setPreview: React.Dispatch<React.SetStateAction<string | null>>,
     maxSizeMb: number,
   ) => {
     const file = e.target.files?.[0];
@@ -212,7 +223,7 @@ export default function EventFormLari({
   const updateTicket = (
     id: number | string,
     field: keyof TicketData,
-    value: any,
+    value: FormFieldValue,
   ) => {
     setTickets(
       tickets.map((t) => (t.id === id ? { ...t, [field]: value } : t)),
@@ -348,7 +359,7 @@ export default function EventFormLari({
   const updateCustomField = (
     id: number | string,
     field: keyof CustomField,
-    value: any,
+    value: FormFieldValue,
   ) =>
     setCustomFields(
       customFields.map((f) => (f.id === id ? { ...f, [field]: value } : f)),
@@ -417,7 +428,7 @@ export default function EventFormLari({
       },
     ]);
   };
-  const updateAddon = (id: string, field: keyof AddonModule, value: any) => {
+  const updateAddon = (id: string, field: keyof AddonModule, value: FormFieldValue) => {
     setAddons(addons.map((a) => (a.id === id ? { ...a, [field]: value } : a)));
   };
   const removeAddon = (id: string) =>
@@ -457,8 +468,8 @@ export default function EventFormLari({
         eventId ? `/dashboard/events/${eventId}` : "/dashboard/events",
       );
       router.refresh();
-    } catch (error: any) {
-      alert(`Terjadi kesalahan: ${error.message}`);
+    } catch (error: unknown) {
+      alert(`Terjadi kesalahan: ${error instanceof Error ? error.message : "Terjadi kesalahan"}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -523,8 +534,10 @@ export default function EventFormLari({
 
             {posterPreview ? (
               <div className="relative w-full h-48 sm:h-72 md:h-96">
-                <img
+                <Image
                   src={posterPreview}
+                  width={1200}
+                  height={700}
                   alt="Poster Event"
                   className="w-full h-full object-cover"
                 />
@@ -556,8 +569,10 @@ export default function EventFormLari({
             <div className="absolute bottom-4 left-4 sm:bottom-6 sm:left-6 md:bottom-8 md:left-8 z-10 group/logo">
               {logoPreview ? (
                 <div className="relative">
-                  <img
+                  <Image
                     src={logoPreview}
+                    width={120}
+                    height={120}
                     alt="Logo Penyelenggara"
                     className="w-20 h-20 sm:w-28 sm:h-28 md:w-32 md:h-32 rounded-full border-4 border-white shadow-xl object-cover bg-white"
                   />
@@ -939,7 +954,7 @@ export default function EventFormLari({
                 Pertanyaan Tambahan (Custom Fields)
               </h3>
               <div className="space-y-4">
-                {customFields.map((field, idx) => (
+                {customFields.map((field) => (
                   <div
                     key={field.id}
                     className={`p-5 border-2 rounded-3xl space-y-4 transition-all ${field.label ? "border-blue-300 bg-blue-50/10" : "border-slate-200 bg-slate-50"}`}
@@ -967,7 +982,7 @@ export default function EventFormLari({
                               updateCustomField(
                                 field.id,
                                 "type",
-                                e.target.value as any,
+                                e.target.value as string,
                               )
                             }
                             className="px-4 py-3 border-2 border-slate-200 rounded-xl bg-white text-xs text-slate-800 outline-none focus:border-blue-600 font-bold cursor-pointer"
@@ -1190,7 +1205,7 @@ export default function EventFormLari({
           </div>
 
           <div className="space-y-6 pt-4">
-            {addons.map((addon, idx) => (
+            {addons.map((addon) => (
               <div
                 key={addon.id}
                 className="p-5 md:p-6 border-2 border-indigo-100 bg-indigo-50/20 rounded-3xl space-y-5 relative"

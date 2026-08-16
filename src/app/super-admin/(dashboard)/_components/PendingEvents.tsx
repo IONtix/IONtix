@@ -2,11 +2,12 @@
 
 import { ArrowUpRight } from "lucide-react";
 import { approveEvent } from "../actions";
+import type { SuperAdminEvent } from "@/lib/platform-types";
 
 export default function PendingEvents({
   pendingEvents,
 }: {
-  pendingEvents: any[];
+  pendingEvents: SuperAdminEvent[];
 }) {
   return (
     <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200 transition-all hover:shadow-md flex flex-col">

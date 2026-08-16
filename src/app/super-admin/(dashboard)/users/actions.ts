@@ -3,7 +3,7 @@
 
 import prisma from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
-// import { hash } from "bcryptjs"; // Hapus komentar ini jika Anda menggunakan bcryptjs untuk enkripsi password
+import bcrypt from "bcryptjs";
 
 export async function createUser(formData: FormData) {
   try {
@@ -12,19 +12,15 @@ export async function createUser(formData: FormData) {
     const password = formData.get("password") as string;
     const role = formData.get("role") as string;
 
-    // TODO: Sangat disarankan untuk mengenkripsi password di production!
-    // const hashedPassword = await hash(password, 10);
+    const hashedPassword = await bcrypt.hash(password, 12);
 
     // Menyimpan data ke database
     await prisma.user.create({
       data: {
         name,
         email,
-        password, // Ganti dengan hashedPassword jika memakai bcrypt
-        // Sesuaikan struktur 'role' di bawah ini dengan skema Prisma Anda
-        // Jika menggunakan string: role,
-        // Jika menggunakan tabel relasi Role: role: { connect: { name: role } }
-        role,
+        password: hashedPassword,
+        role: { connectOrCreate: { where: { name: role }, create: { name: role, isSystem: false } } },
       },
     });
 

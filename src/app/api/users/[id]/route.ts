@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import prisma from "@/lib/prisma";
+import type { Prisma } from "@/generated/prisma/client";
 
 // ==============================================================
 // 1. API UNTUK MENGEDIT USER (PUT) - FAILSAFE & ENTERPRISE
@@ -24,7 +25,7 @@ export async function PUT(
 
     // Cek Akses Super Admin
     const session = await getServerSession(authOptions);
-    if (!session || (session.user as any).role !== "SUPER_ADMIN") {
+    if (!session || session.user.role !== "SUPER_ADMIN") {
       return NextResponse.json(
         { message: "Tidak memiliki hak akses" },
         { status: 401 },
@@ -39,7 +40,7 @@ export async function PUT(
     if (role === "EO") normalizedRoleName = "EO";
 
     // Build payload update dasar
-    let updateData: any = {
+    const updateData: Prisma.UserUpdateInput = {
       name,
     };
 
@@ -73,13 +74,12 @@ export async function PUT(
       updateData.role = {
         connect: { id: roleRecord.id },
       };
-    } catch (roleError) {
-      // Fallback jika 'role' di schema prisma Anda adalah Enum/String biasa
-      console.warn(
-        "Relasi tabel Role gagal, mencoba update string langsung:",
-        roleError,
+    } catch (roleError: unknown) {
+      console.warn("Gagal menghubungkan role:", roleError);
+      return NextResponse.json(
+        { message: "Role pengguna tidak dapat ditetapkan." },
+        { status: 400 },
       );
-      updateData.role = normalizedRoleName;
     }
 
     // Eksekusi update user
@@ -95,12 +95,12 @@ export async function PUT(
       { message: "Pengguna berhasil diperbarui", user: updatedUser },
       { status: 200 },
     );
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error updating user:", error);
     return NextResponse.json(
       {
         message:
-          error?.message ||
+          error instanceof Error ? error.message :
           "Terjadi kesalahan pada server saat memperbarui data.",
       },
       { status: 500 },
@@ -127,26 +127,18 @@ export async function DELETE(
     }
 
     const session = await getServerSession(authOptions);
-    if (!session || (session.user as any).role !== "SUPER_ADMIN") {
+    if (!session || session.user.role !== "SUPER_ADMIN") {
       return NextResponse.json(
         { message: "Tidak memiliki hak akses" },
         { status: 401 },
       );
     }
 
-    if ((session.user as any).id === id) {
+    if (session.user.id === id) {
       return NextResponse.json(
         { message: "Anda tidak dapat menonaktifkan akun Anda sendiri!" },
         { status: 400 },
       );
-    }
-
-    // Hapus relasi pendukung terlebih dahulu (jika ada)
-    try {
-      await prisma.account?.deleteMany({ where: { userId: id } });
-      await prisma.session?.deleteMany({ where: { userId: id } });
-    } catch (e) {
-      // Abaikan jika tidak ada relasi
     }
 
     // Eksekusi hapus
@@ -158,10 +150,10 @@ export async function DELETE(
       { message: "Pengguna berhasil dihapus" },
       { status: 200 },
     );
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error deleting user:", error);
 
-    if (error?.code === "P2003") {
+    if (error instanceof Object && "code" in error && error.code === "P2003") {
       return NextResponse.json(
         {
           message:
@@ -172,7 +164,7 @@ export async function DELETE(
     }
 
     return NextResponse.json(
-      { message: error?.message || "Gagal menghapus pengguna" },
+      { message: error instanceof Error ? error.message : "Gagal menghapus pengguna" },
       { status: 500 },
     );
   }

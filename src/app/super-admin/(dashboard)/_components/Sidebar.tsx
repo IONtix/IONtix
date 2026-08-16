@@ -9,7 +9,6 @@ import {
   Building2,
   Ticket,
   Wallet,
-  Settings,
   LogOut,
 } from "lucide-react";
 

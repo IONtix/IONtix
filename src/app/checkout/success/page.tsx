@@ -14,11 +14,9 @@ export default async function SuccessPage({
   const latestOrder = await prisma.order.findFirst({
     orderBy: { createdAt: "desc" },
     include: {
-      ticketCategory: {
-        include: {
-          event: true,
-        },
-      },
+      event: true,
+      ticketCategory: true,
+      participant: true,
     },
   });
 
@@ -46,13 +44,13 @@ export default async function SuccessPage({
         {latestOrder && (
           <ETicketCard
             orderId={latestOrder.id}
-            fullName={latestOrder.fullName}
-            eventTitle={latestOrder.ticketCategory.event.title}
-            ticketName={latestOrder.ticketCategory.name}
-            jerseySize={latestOrder.jerseySize}
-            location={latestOrder.ticketCategory.event.location}
+            fullName={latestOrder.fullName ?? latestOrder.participant?.fullName ?? "Peserta"}
+            eventTitle={latestOrder.event.title}
+            ticketName={latestOrder.ticketCategory?.name ?? "Tiket"}
+            jerseySize={latestOrder.jerseySize ?? "-"}
+            location={latestOrder.event.location}
             date={new Date(
-              latestOrder.ticketCategory.event.date,
+              latestOrder.event.date,
             ).toLocaleDateString("id-ID", {
               day: "numeric",
               month: "long",

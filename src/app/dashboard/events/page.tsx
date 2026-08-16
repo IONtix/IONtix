@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import Image from "next/image";
+import type { DashboardEvent } from "@/lib/platform-types";
 import Link from "next/link";
 import {
   Plus,
@@ -18,7 +20,7 @@ import {
 import { getEvents, deleteEventWithPassword } from "../../actions/event";
 
 export default function EventManagementPage() {
-  const [events, setEvents] = useState<any[]>([]);
+  const [events, setEvents] = useState<DashboardEvent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState("semua");
@@ -39,7 +41,7 @@ export default function EventManagementPage() {
       if (result.success && result.data) {
         setEvents(result.data);
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Terjadi kesalahan:", error);
     } finally {
       setIsLoading(false);
@@ -47,11 +49,12 @@ export default function EventManagementPage() {
   };
 
   useEffect(() => {
-    fetchEvents();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void fetchEvents();
   }, []);
 
   // FUNGSI MEMASTIKAN URL GAMBAR SELALU VALID
-  const getValidImageUrl = (event: any) => {
+  const getValidImageUrl = (event: DashboardEvent) => {
     const rawImage =
       event.imageUrl ||
       event.posterUrl ||
@@ -74,7 +77,7 @@ export default function EventManagementPage() {
   };
 
   // FUNGSI CEK STATUS OTOMATIS BERDASARKAN TANGGAL
-  const getEventStatus = (event: any) => {
+  const getEventStatus = (event: DashboardEvent) => {
     if (event.isPublished === false) return "draft";
 
     const eventDateObj = event.date ? new Date(event.date) : null;
@@ -117,7 +120,7 @@ export default function EventManagementPage() {
       } else {
         setDeleteError(result.error || "Gagal menghapus event.");
       }
-    } catch (err) {
+    } catch {
       setDeleteError("Terjadi kesalahan jaringan.");
     } finally {
       setIsDeleting(false);
@@ -228,8 +231,8 @@ export default function EventManagementPage() {
               Belum Ada Event
             </h3>
             <p className="text-slate-400 text-sm mb-6 max-w-md text-center">
-              Anda belum membuat event apapun, atau tidak ada data pada filter "
-              {activeTab}".
+              Anda belum membuat event apapun, atau tidak ada data pada filter
+              &quot;{activeTab}&quot;.
             </p>
           </div>
         ) : (
@@ -271,9 +274,11 @@ export default function EventManagementPage() {
                     <div className="absolute inset-0 bg-linear-to-t from-[#131A2B] via-[#131A2B]/40 to-transparent z-10 pointer-events-none" />
 
                     {imageUrl ? (
-                      <img
+                      <Image
                         src={imageUrl}
                         alt={event.title}
+                        width={1200}
+                        height={700}
                         className={`w-full h-full object-cover transition-transform duration-700 opacity-80 ${
                           isSelesai
                             ? "grayscale"
@@ -399,7 +404,7 @@ export default function EventManagementPage() {
                 <p className="text-slate-300 text-sm mb-2">
                   Anda akan menghapus event{" "}
                   <span className="font-bold text-white">
-                    "{deleteModal.eventName}"
+                    &quot;{deleteModal.eventName}&quot;
                   </span>{" "}
                   secara permanen.
                 </p>

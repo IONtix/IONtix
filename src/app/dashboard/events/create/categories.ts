@@ -1,4 +1,4 @@
-import { Footprints, Waves, GraduationCap, Layers, Bike } from "lucide-react";
+import { Footprints, Waves, Layers, Bike } from "lucide-react";
 
 export const EVENT_CATEGORIES = [
   {

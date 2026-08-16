@@ -3,6 +3,7 @@
 import React, { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import EventPreviewMockup from "../EventPreviewMockup";
+import type { FormFieldValue } from "@/lib/platform-types";
 import {
   UploadCloud,
   Plus,
@@ -11,7 +12,6 @@ import {
   Waves,
   ShieldAlert,
   ClipboardList,
-  Layers,
   Image as ImageIcon,
   Loader2,
   X,
@@ -192,7 +192,7 @@ export default function EventFormRenang() {
   const updateCustomField = (
     id: number | string,
     field: keyof CustomField,
-    value: any,
+    value: FormFieldValue,
   ) => {
     setCustomFields(
       customFields.map((f) => (f.id === id ? { ...f, [field]: value } : f)),
@@ -259,8 +259,8 @@ export default function EventFormRenang() {
 
       router.push("/dashboard/events");
       router.refresh();
-    } catch (error: any) {
-      alert(`Terjadi kesalahan: ${error.message || "Gagal menyimpan event"}`);
+    } catch (error: unknown) {
+      alert(`Terjadi kesalahan: ${error instanceof Error ? error.message : "Gagal menyimpan event"}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -617,7 +617,7 @@ export default function EventFormRenang() {
           </div>
 
           <div className="space-y-6">
-            {customFields.map((field, idx) => (
+            {customFields.map((field) => (
               <div
                 key={field.id}
                 className="p-5 bg-slate-50 border border-slate-200 rounded-3xl space-y-4"
@@ -641,7 +641,7 @@ export default function EventFormRenang() {
                           updateCustomField(
                             field.id,
                             "type",
-                            e.target.value as any,
+                            e.target.value as string,
                           )
                         }
                         className="px-3 py-2.5 border border-slate-200 rounded-xl bg-white text-xs font-bold cursor-pointer focus:border-cyan-500 outline-none"

@@ -5,6 +5,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { redirect } from "next/navigation";
 import prisma from "@/lib/prisma";
 import { Search, Shield, User, Building2, Mail } from "lucide-react";
+import type { SuperAdminUser } from "@/lib/platform-types";
 
 // IMPORT KOMPONEN CLIENT DI SINI
 import AddUserModal from "./_components/AddUserModal";
@@ -14,7 +15,7 @@ export default async function UsersManagementPage() {
   const session = await getServerSession(authOptions);
 
   // 1. SECURITY & ACCESS CONTROL
-  if (!session?.user || (session.user as any).role !== "SUPER_ADMIN") {
+  if (!session?.user || session.user.role !== "SUPER_ADMIN") {
     redirect("/super-admin/login");
   }
 
@@ -33,12 +34,11 @@ export default async function UsersManagementPage() {
   const totalUsers = users.length;
   // Menyesuaikan dengan struktur role Anda (string atau relasi object)
   const totalAdmin = users.filter(
-    (u: any) => u.role === "SUPER_ADMIN" || u.role?.name === "SUPER_ADMIN",
+    (u: SuperAdminUser) => u.role?.name === "SUPER_ADMIN",
   ).length;
   const totalEO = users.filter(
-    (u: any) => u.role === "EO" || u.role?.name === "EO",
+    (u: SuperAdminUser) => u.role?.name === "EO",
   ).length;
-  const totalRegular = totalUsers - totalAdmin - totalEO;
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 ease-out">
@@ -133,8 +133,8 @@ export default async function UsersManagementPage() {
                   </td>
                 </tr>
               ) : (
-                users.map((user: any) => {
-                  const roleName = user.role?.name || user.role || "USER";
+                users.map((user: SuperAdminUser) => {
+                  const roleName = user.role?.name ?? "USER";
 
                   return (
                     <tr

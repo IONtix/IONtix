@@ -39,7 +39,7 @@ export async function POST(req: Request) {
         email,
         phone,
         password: hashedPassword,
-        role: "EO", // Memastikan akun terdaftar sebagai mitra Event Organizer
+        role: { connect: { name: "EO" } },
       },
     });
 
@@ -47,7 +47,7 @@ export async function POST(req: Request) {
       { message: "Registrasi EO berhasil!", userId: newUser.id },
       { status: 201 },
     );
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Error pada Registrasi:", error);
     return NextResponse.json(
       { message: "Terjadi kesalahan internal pada server." },

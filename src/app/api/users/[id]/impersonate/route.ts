@@ -13,7 +13,7 @@ export async function POST(
     const { id } = resolvedParams;
 
     const session = await getServerSession(authOptions);
-    if (!session || (session.user as any).role !== "SUPER_ADMIN") {
+    if (!session || session.user.role !== "SUPER_ADMIN") {
       return NextResponse.json({ message: "Akses ditolak" }, { status: 401 });
     }
 
@@ -30,7 +30,7 @@ export async function POST(
     }
 
     // Tentukan URL tujuan berdasarkan role pengguna target
-    const roleName = targetUser.role?.name || (targetUser as any).role;
+    const roleName = targetUser.role?.name ?? "PESERTA";
     let redirectUrl = "/dashboard";
     if (roleName === "EO") redirectUrl = "/dashboard/events";
     if (roleName === "USER") redirectUrl = "/";
@@ -39,9 +39,9 @@ export async function POST(
       message: `Berhasil berganti peran sebagai ${targetUser.name || targetUser.email}`,
       redirectUrl,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { message: error?.message || "Gagal melakukan impersonasi" },
+      { message: error instanceof Error ? error.message : "Gagal melakukan impersonasi" },
       { status: 500 },
     );
   }

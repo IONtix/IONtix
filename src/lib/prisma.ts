@@ -1,33 +1,39 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient } from "@/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 
-// Fungsi untuk membuat koneksi baru
-const prismaClientSingleton = () => {
+const globalForPrisma = globalThis as unknown as {
+  prisma: PrismaClient | undefined;
+  prismaPool: Pool | undefined;
+};
+
+function createPrismaClient() {
   const connectionString = process.env.DATABASE_URL;
 
   if (!connectionString) {
     throw new Error("DATABASE_URL is not defined in environment variables.");
   }
 
-  const pool = new Pool({ connectionString });
-  const adapter = new PrismaPg(pool);
+  const pool =
+    globalForPrisma.prismaPool ??
+    new Pool({
+      connectionString,
+      max: 10,
+    });
 
-  return new PrismaClient({ adapter });
-};
+  if (process.env.NODE_ENV !== "production") {
+    globalForPrisma.prismaPool = pool;
+  }
 
-// Deklarasi global untuk menampung instance Prisma di environment Node.js
-declare global {
-  // eslint-disable-next-line no-var
-  var prismaGlobal: ReturnType<typeof prismaClientSingleton> | undefined;
+  return new PrismaClient({
+    adapter: new PrismaPg(pool),
+  });
 }
 
-// Gunakan instance yang sudah ada di global, atau buat baru jika belum ada
-const prisma = globalThis.prismaGlobal ?? prismaClientSingleton();
+const prisma = globalForPrisma.prisma ?? createPrismaClient();
 
-// Simpan ke global saat mode development agar tidak bocor saat Next.js Hot Reload
 if (process.env.NODE_ENV !== "production") {
-  globalThis.prismaGlobal = prisma;
+  globalForPrisma.prisma = prisma;
 }
 
 export default prisma;

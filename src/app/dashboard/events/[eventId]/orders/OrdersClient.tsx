@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { updateParticipantStatus } from "@/app/actions/event";
+import type { OrderRow, JsonObject } from "@/lib/platform-types";
 import {
   CheckCircle2,
   XCircle,
@@ -11,7 +12,7 @@ import {
   Package,
 } from "lucide-react";
 
-export default function OrdersClient({ orders }: { orders: any[] }) {
+export default function OrdersClient({ orders }: { orders: OrderRow[] }) {
   const [loadingId, setLoadingId] = useState<string | null>(null);
 
   const handleStatusChange = async (
@@ -57,7 +58,7 @@ export default function OrdersClient({ orders }: { orders: any[] }) {
             ) : (
               orders.map((order) => {
                 const customAnswers =
-                  (order.customAnswers as Record<string, any>) || {};
+                  (order.customAnswers as JsonObject) || {};
 
                 return (
                   <tr
@@ -92,7 +93,7 @@ export default function OrdersClient({ orders }: { orders: any[] }) {
                       {Object.keys(customAnswers).length > 0 ? (
                         <div className="space-y-1 text-xs">
                           {Object.entries(customAnswers).map(
-                            ([key, value]: [string, any]) => (
+                            ([key, value]: [string, unknown]) => (
                               <div key={key} className="truncate">
                                 <span className="font-semibold text-muted-foreground">
                                   {key}:{" "}
@@ -125,7 +126,7 @@ export default function OrdersClient({ orders }: { orders: any[] }) {
                     <td className="p-4">
                       {order.addonOrders && order.addonOrders.length > 0 ? (
                         <div className="space-y-1">
-                          {order.addonOrders.map((ao: any) => (
+                          {order.addonOrders?.map((ao) => (
                             <div
                               key={ao.id}
                               className="text-xs flex items-center gap-1.5 font-medium"

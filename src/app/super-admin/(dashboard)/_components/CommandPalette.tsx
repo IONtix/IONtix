@@ -115,7 +115,7 @@ export default function CommandPalette() {
             </div>
           ) : (
             <div className="py-8 text-center text-sm text-slate-500">
-              Tidak ada hasil yang ditemukan untuk "{searchQuery}"
+              Tidak ada hasil yang ditemukan untuk &quot;{searchQuery}&quot;
             </div>
           )}
         </div>

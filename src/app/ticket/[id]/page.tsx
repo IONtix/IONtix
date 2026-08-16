@@ -21,7 +21,8 @@ export default async function TicketPage({
           event: true,
         },
       },
-      runner: true,
+      user: true,
+      participant: true,
       transaction: true,
     },
   });
@@ -143,10 +144,10 @@ export default async function TicketPage({
                 NAMA PESERTA
               </p>
               <p className="text-sm sm:text-base font-black text-white mt-0.5 uppercase tracking-wide truncate">
-                {ticket.runner.name}
+                {ticket.user?.name ?? ticket.participant?.fullName ?? "Peserta"}
               </p>
               <p className="text-[10px] font-mono text-slate-400 truncate mt-0.5">
-                {ticket.runner.email}
+                {ticket.user?.email ?? ticket.participant?.email ?? "-"}
               </p>
             </div>
             <div className="text-right pl-3 border-l border-slate-700/80 shrink-0">

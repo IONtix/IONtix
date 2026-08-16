@@ -14,7 +14,7 @@ export async function GET(request: Request) {
       );
     }
 
-    const eoId = (session.user as any).id;
+    const eoId = session.user.id;
     if (!eoId) {
       return NextResponse.json(
         { error: "ID EO tidak ditemukan." },
@@ -50,15 +50,15 @@ export async function GET(request: Request) {
       },
     });
 
-    const categoryIds = eoEvents.flatMap((event: any) =>
-      event.categories.map((cat: any) => cat.id),
+    const categoryIds = eoEvents.flatMap((event) =>
+      event.categories.map((cat) => cat.id),
     );
 
-    const totalKapasitas = eoEvents.reduce((acc: number, event: any) => {
+    const totalKapasitas = eoEvents.reduce((acc, event) => {
       return (
         acc +
         event.categories.reduce(
-          (catAcc: number, cat: any) => catAcc + (cat.capacity || 0),
+          (catAcc, cat) => catAcc + (cat.capacity || 0),
           0,
         )
       );
@@ -74,7 +74,7 @@ export async function GET(request: Request) {
     });
 
     const totalPendapatan = successTransactions.reduce(
-      (sum: number, trx: any) => sum + trx.amount,
+      (sum, trx) => sum + trx.amount,
       0,
     );
 
@@ -99,8 +99,8 @@ export async function GET(request: Request) {
       nextDate.setDate(nextDate.getDate() + 1);
 
       const dailyTotal = successTransactions
-        .filter((trx: any) => trx.createdAt >= date && trx.createdAt < nextDate)
-        .reduce((sum: number, trx: any) => sum + trx.amount, 0);
+        .filter((trx) => trx.createdAt >= date && trx.createdAt < nextDate)
+        .reduce((sum, trx) => sum + trx.amount, 0);
 
       salesChart.push({
         name: date.toLocaleDateString("id-ID", { weekday: "short" }),
@@ -129,7 +129,7 @@ export async function GET(request: Request) {
       },
     });
 
-    const formattedRecentTransactions = recentTransactions.map((trx: any) => {
+    const formattedRecentTransactions = recentTransactions.map((trx) => {
       const firstTicket = trx.tickets[0];
       return {
         id: trx.id.slice(0, 8).toUpperCase(),
@@ -162,7 +162,8 @@ export async function GET(request: Request) {
       },
       { status: 200 },
     );
-  } catch (error) {
+  } catch (error: unknown) {
+    console.error("EO dashboard error:", error);
     return NextResponse.json(
       { error: "Gagal mengambil data" },
       { status: 500 },

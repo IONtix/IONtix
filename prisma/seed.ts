@@ -1,105 +1,147 @@
-import { PrismaClient } from "@prisma/client";
-import * as bcrypt from "bcryptjs"; // atau 'bcrypt' sesuai package yang Anda gunakan
+import { PrismaClient } from "../src/generated/prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { Pool } from "pg";
+import bcrypt from "bcryptjs";
 
-const prisma = new PrismaClient();
+const connectionString = process.env.DIRECT_URL || process.env.DATABASE_URL;
+if (!connectionString) throw new Error("DATABASE_URL or DIRECT_URL is not defined.");
+const pool = new Pool({ connectionString });
+const adapter = new PrismaPg(pool);
+const prisma = new PrismaClient({ adapter });
+
+type PermissionSeed = {
+  name: string;
+  description: string;
+  module: string;
+};
+
+const permissions: PermissionSeed[] = [
+  { name: "platform.view", description: "View platform dashboard", module: "platform" },
+  { name: "users.view", description: "View users", module: "users" },
+  { name: "users.manage", description: "Manage users", module: "users" },
+  { name: "roles.manage", description: "Manage roles and permissions", module: "rbac" },
+  { name: "eo.view", description: "View event organizers", module: "eo" },
+  { name: "eo.manage", description: "Manage event organizers", module: "eo" },
+  { name: "sports.manage", description: "Manage sports and sport templates", module: "sports" },
+  { name: "forms.manage", description: "Manage dynamic form templates", module: "forms" },
+  { name: "events.view", description: "View events", module: "events" },
+  { name: "events.manage", description: "Create and manage events", module: "events" },
+  { name: "participants.view", description: "View participants", module: "participants" },
+  { name: "participants.manage", description: "Manage participant data", module: "participants" },
+  { name: "orders.view", description: "View orders", module: "orders" },
+  { name: "orders.manage", description: "Manage orders", module: "orders" },
+  { name: "payments.view", description: "View payments", module: "finance" },
+  { name: "payments.manage", description: "Manage payments and refunds", module: "finance" },
+  { name: "settlements.view", description: "View settlements", module: "finance" },
+  { name: "settlements.manage", description: "Manage settlements", module: "finance" },
+  { name: "tickets.view", description: "View tickets", module: "tickets" },
+  { name: "tickets.manage", description: "Issue and manage tickets", module: "tickets" },
+  { name: "checkin.manage", description: "Manage event check-in", module: "checkin" },
+  { name: "audit.view", description: "View audit logs", module: "security" },
+  { name: "system.manage", description: "Manage system settings", module: "system" },
+];
+
+async function seedPermissions() {
+  const created = [];
+  for (const permission of permissions) {
+    const item = await prisma.permission.upsert({
+      where: { name: permission.name },
+      update: permission,
+      create: permission,
+    });
+    created.push(item);
+  }
+  return created;
+}
 
 async function main() {
-  console.log("🌱 Memulai proses seeding data awal...");
+  console.log("🌱 Starting IONtix V2 seed...");
 
-  // 1. Buat Daftar Permission Awal (Fitur Super Admin)
-  const permissionsList = [
-    { name: "view_dashboard", description: "Melihat ringkasan metrik sistem" },
-    {
-      name: "manage_users",
-      description: "Mengelola pengguna (suspend, reset password, hapus)",
-    },
-    { name: "manage_roles", description: "Mengatur peran dan hak akses" },
-    { name: "manage_eo", description: "Verifikasi dan kelola Event Organizer" },
-    {
-      name: "manage_events",
-      description: "Moderasi event yang didaftarkan EO",
-    },
-    {
-      name: "manage_finance",
-      description: "Melihat transaksi dan persetujuan pencairan dana",
-    },
-  ];
+  const seededPermissions = await seedPermissions();
+  const permissionIds = seededPermissions.map(({ id }) => ({ id }));
 
-  const createdPermissions = [];
-  for (const perm of permissionsList) {
-    const p = await prisma.permission.upsert({
-      where: { name: perm.name },
-      update: {},
-      create: perm,
-    });
-    createdPermissions.push(p);
-  }
-  console.log(
-    `✅ ${createdPermissions.length} Permissions berhasil dibuat/diperbarui.`,
-  );
-
-  // 2. Buat Role SUPER_ADMIN & Hubungkan dengan Semua Permission
   const superAdminRole = await prisma.role.upsert({
     where: { name: "SUPER_ADMIN" },
     update: {
+      description: "Full platform administration",
+      isSystem: true,
       permissions: {
-        connect: createdPermissions.map((p) => ({ id: p.id })),
+        set: permissionIds,
       },
     },
     create: {
       name: "SUPER_ADMIN",
-      description: "Akses penuh ke seluruh sistem IONtix",
-      permissions: {
-        connect: createdPermissions.map((p) => ({ id: p.id })),
-      },
+      description: "Full platform administration",
+      isSystem: true,
+      permissions: { connect: permissionIds },
     },
   });
 
-  // Buat Role bawaan lainnya
-  await prisma.role.upsert({
+  const eoRole = await prisma.role.upsert({
     where: { name: "EO" },
-    update: {},
-    create: { name: "EO", description: "Penyelenggara Acara Olahraga" },
+    update: { description: "Event organizer", isSystem: true },
+    create: { name: "EO", description: "Event organizer", isSystem: true },
   });
 
   await prisma.role.upsert({
     where: { name: "PESERTA" },
-    update: {},
-    create: { name: "PESERTA", description: "Peserta / Pembeli Tiket" },
+    update: { description: "Participant / ticket buyer", isSystem: true },
+    create: { name: "PESERTA", description: "Participant / ticket buyer", isSystem: true },
   });
 
-  console.log("✅ Role SUPER_ADMIN, EO, dan PESERTA berhasil disiapkan.");
+  await prisma.role.upsert({
+    where: { name: "SUPPORT_ADMIN" },
+    update: { description: "Support and controlled administrative access", isSystem: false },
+    create: { name: "SUPPORT_ADMIN", description: "Support and controlled administrative access", isSystem: false },
+  });
 
-  // 3. Hash Password untuk Akun Super Admin Pertama
-  const defaultPassword = "SuperAdminIONtix2026!"; // Silakan ubah password ini
-  const hashedPassword = await bcrypt.hash(defaultPassword, 10);
+  const password = process.env.IONTIX_SEED_ADMIN_PASSWORD ?? "CHANGE-ME-IMMEDIATELY";
+  const adminEmail = process.env.IONTIX_SEED_ADMIN_EMAIL ?? "admin@iontix.com";
+  const hashedPassword = await bcrypt.hash(password, 12);
 
-  // 4. Buat Akun User Super Admin
   const adminUser = await prisma.user.upsert({
-    where: { email: "admin@iontix.com" },
+    where: { email: adminEmail },
     update: {
       roleId: superAdminRole.id,
+      password: hashedPassword,
+      status: "ACTIVE",
+      isDeleted: false,
     },
     create: {
       name: "Super Admin IONtix",
-      email: "admin@iontix.com",
+      email: adminEmail,
       password: hashedPassword,
-      phone: "081234567890",
       roleId: superAdminRole.id,
+      status: "ACTIVE",
     },
   });
 
-  console.log("--------------------------------------------------");
-  console.log("🎉 Seeding berhasil selesaikan!");
-  console.log(`Email Admin: ${adminUser.email}`);
-  console.log(`Password   : ${defaultPassword}`);
-  console.log("--------------------------------------------------");
+  const defaultSports = [
+    ["Running", "running"],
+    ["Trail Running", "trail-running"],
+    ["Cycling", "cycling"],
+    ["Swimming", "swimming"],
+    ["Hockey", "hockey"],
+    ["Taekwondo", "taekwondo"],
+  ] as const;
+
+  for (const [name, slug] of defaultSports) {
+    await prisma.sport.upsert({
+      where: { slug },
+      update: { name, isActive: true },
+      create: { name, slug, isActive: true },
+    });
+  }
+
+  console.log(`✅ Seed complete. Admin: ${adminUser.email}`);
+  console.log(`ℹ️ EO role id: ${eoRole.id}`);
+  console.log("⚠️ Set IONTIX_SEED_ADMIN_PASSWORD before production seeding.");
 }
 
 main()
-  .catch((e) => {
-    console.error("❌ Terjadi kesalahan saat seeding:", e);
-    process.exit(1);
+  .catch((error) => {
+    console.error("❌ IONtix seed failed:", error);
+    process.exitCode = 1;
   })
   .finally(async () => {
     await prisma.$disconnect();

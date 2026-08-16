@@ -13,7 +13,7 @@ export async function POST(
     const { id } = resolvedParams;
 
     const session = await getServerSession(authOptions);
-    if (!session || (session.user as any).role !== "SUPER_ADMIN") {
+    if (!session || session.user.role !== "SUPER_ADMIN") {
       return NextResponse.json({ message: "Akses ditolak" }, { status: 401 });
     }
 
@@ -31,9 +31,9 @@ export async function POST(
     return NextResponse.json({
       message: `Link reset password berhasil dikirim ke ${targetUser.email}`,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { message: error?.message || "Gagal mengirimi reset password" },
+      { message: error instanceof Error ? error.message : "Gagal mengirimi reset password" },
       { status: 500 },
     );
   }

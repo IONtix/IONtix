@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import useSWR from "swr";
 import Link from "next/link";
+import type { DashboardEventOption, DashboardTransaction } from "@/lib/platform-types";
 import {
   TrendingUp,
   Users,
@@ -99,7 +100,7 @@ export default function DashboardOverviewPage() {
                   Semua Event Tergabung
                 </option>
                 {availableEvents &&
-                  availableEvents.map((evt: any) => (
+                  availableEvents.map((evt: DashboardEventOption) => (
                     <option
                       key={evt.id}
                       value={evt.id}
@@ -303,7 +304,7 @@ export default function DashboardOverviewPage() {
                     textTransform: "uppercase",
                     marginBottom: "4px",
                   }}
-                  formatter={(value: any) => [
+                  formatter={(value) => [
                     `Rp ${Number(value || 0).toLocaleString("id-ID")}`,
                     "Pendapatan",
                   ]}
@@ -344,7 +345,7 @@ export default function DashboardOverviewPage() {
                 Belum ada transaksi
               </div>
             ) : (
-              recentTransactions.map((trx: any, idx: number) => (
+              recentTransactions.map((trx: DashboardTransaction, idx: number) => (
                 <div
                   key={idx}
                   className="flex items-center justify-between p-3 rounded-xl bg-slate-800/30 border border-slate-700/50 hover:bg-slate-800/80 transition-colors"

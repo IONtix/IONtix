@@ -15,7 +15,7 @@ export async function GET() {
         name: "Admin IONtix",
         email: "eo@iontix.com",
         password: hashedPassword,
-        role: "EO", // Sesuai dengan Role Enum di skema Anda
+        role: { connect: { name: "EO" } },
       },
     });
 
@@ -24,7 +24,7 @@ export async function GET() {
       email: user.email,
       password: "admin123",
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error(error);
     return NextResponse.json({ error: "Gagal membuat akun" }, { status: 500 });
   }

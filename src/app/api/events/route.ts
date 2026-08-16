@@ -2,58 +2,79 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 
+interface EventTicketInput {
+  name?: string;
+  price?: string | number;
+  quota?: string | number;
+}
+
+interface CreateEventBody {
+  eventDetails: {
+    name: string;
+    category?: string | null;
+    description?: string | null;
+    startDate: string;
+    endDate?: string | null;
+    location?: string | null;
+    mapsUrl?: string | null;
+    rules?: string | null;
+    contactName?: string | null;
+    contactPhone?: string | null;
+  };
+  posterPreview?: string | null;
+  logoPreview?: string | null;
+  tickets: EventTicketInput[];
+}
+
+const toNumber = (value: string | number | undefined): number => {
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  if (!value?.trim()) return 0;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
+    const body = (await request.json()) as CreateEventBody;
     const { eventDetails, posterPreview, logoPreview, tickets } = body;
 
-    // 1. Ambil secara otomatis user pertama yang memiliki role EO dari database
     const eoUser = await prisma.user.findFirst({
-      where: {
-        role: "EO",
-      },
+      where: { role: { name: "EO" } },
     });
 
-    // Validasi: Jika akun EO belum ada di database, tampilkan pesan peringatan
     if (!eoUser) {
       return NextResponse.json(
-        {
-          success: false,
-          message:
-            "User dengan role EO tidak ditemukan di database. Silakan daftarkan akun EO terlebih dahulu.",
-        },
+        { success: false, message: "User dengan role EO tidak ditemukan di database. Silakan daftarkan akun EO terlebih dahulu." },
         { status: 400 },
       );
     }
 
-    // 2. Simpan Event ke database menggunakan ID dari akun EO yang ditemukan
     const newEvent = await prisma.event.create({
       data: {
-        title: eventDetails.name,
-        category: eventDetails.category,
-        description: eventDetails.description,
+        title: eventDetails.name.trim(),
+        category: eventDetails.category ?? null,
+        description: eventDetails.description ?? "",
         date: new Date(eventDetails.startDate),
         endDate: eventDetails.endDate ? new Date(eventDetails.endDate) : null,
-        location: eventDetails.location,
-        mapsUrl: eventDetails.mapsUrl,
-        imageUrl: posterPreview,
-        logoUrl: logoPreview,
-        rules: eventDetails.rules,
-        contactName: eventDetails.contactName,
-        contactPhone: eventDetails.contactPhone,
+        location: eventDetails.location ?? "Online/Offline",
+        mapsUrl: eventDetails.mapsUrl ?? null,
+        imageUrl: posterPreview ?? null,
+        logoUrl: logoPreview ?? null,
+        rules: eventDetails.rules ?? null,
+        contactName: eventDetails.contactName ?? null,
+        contactPhone: eventDetails.contactPhone ?? null,
         isPublished: true,
-        eoId: eoUser.id, // <-- Menggunakan ID EO yang didapat otomatis dari DB
+        eoId: eoUser.id,
         categories: {
-          create: tickets.map((ticket: any) => ({
-            name: ticket.name,
-            price: parseFloat(ticket.price || 0),
-            capacity: parseInt(ticket.quota || 0),
+          create: (tickets ?? []).map((ticket) => ({
+            name: ticket.name?.trim() || "Kategori Umum",
+            price: toNumber(ticket.price),
+            capacity: toNumber(ticket.quota),
           })),
         },
       },
     });
 
-    // Reset cache halaman agar event langsung muncul
     revalidatePath("/");
     revalidatePath("/dashboard/events");
 
@@ -61,10 +82,10 @@ export async function POST(request: Request) {
       { success: true, message: "Event berhasil disimpan!", data: newEvent },
       { status: 201 },
     );
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Error API Create Event:", error);
     return NextResponse.json(
-      { success: false, message: "Terjadi kesalahan saat menyimpan data." },
+      { success: false, message: error instanceof Error ? error.message : "Terjadi kesalahan saat menyimpan data." },
       { status: 500 },
     );
   }

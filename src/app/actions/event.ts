@@ -3,8 +3,69 @@
 import { revalidatePath } from "next/cache";
 import prisma from "@/lib/prisma";
 import bcrypt from "bcryptjs";
+import type { Prisma } from "@/generated/prisma/client";
 
-export async function createEvent(payload: any, isPublished: boolean) {
+type EventCategoryInput = {
+  name?: string;
+  price?: string | number;
+  capacity?: string | number;
+  quota?: string | number;
+  elevation?: string | null;
+  cot?: string | null;
+  description?: string | null;
+  requireApproval?: boolean | string;
+};
+
+type EventAddonInput = {
+  type?: "MERCHANDISE" | "CARBO_LOADING" | "SHUTTLE" | "HOTEL";
+  name?: string;
+  price?: string | number;
+  capacity?: string | number | null;
+  quota?: string | number | null;
+  description?: string | null;
+  imageUrl?: string | null;
+};
+
+type EventPayload = {
+  title?: string;
+  category?: string | null;
+  description?: string;
+  date?: string | Date;
+  endDate?: string | Date | null;
+  locationName?: string;
+  location?: string;
+  mapsUrl?: string | null;
+  imageUrl?: string | null;
+  bannerUrl?: string | null;
+  posterUrl?: string | null;
+  coverUrl?: string | null;
+  image?: string | null;
+  banner?: string | null;
+  poster?: string | null;
+  cover?: string | null;
+  logoUrl?: string | null;
+  rules?: string | null;
+  contactName?: string | null;
+  contactPhone?: string | null;
+  customFields?: unknown;
+  categories?: EventCategoryInput[];
+  addons?: EventAddonInput[];
+};
+
+const toNumber = (value: string | number | null | undefined, fallback = 0): number => {
+  if (typeof value === "number") return Number.isFinite(value) ? value : fallback;
+  if (typeof value !== "string" || value.trim() === "") return fallback;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const toJsonValue = (value: unknown): Prisma.InputJsonValue | undefined => {
+  if (value === undefined || value === null) return undefined;
+  return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
+};
+
+
+export async function createEvent(payload: EventPayload, isPublished: boolean) {
   try {
     console.log("=== PAYLOAD DITERIMA DARI FORM ===");
     console.log(JSON.stringify(payload, null, 2));
@@ -12,7 +73,7 @@ export async function createEvent(payload: any, isPublished: boolean) {
 
     // 1. CARI ATAU BUAT USER EO
     let eoUser = await prisma.user.findFirst({
-      where: { role: "EO" },
+      where: { role: { name: "EO" } },
     });
 
     if (!eoUser) {
@@ -21,16 +82,16 @@ export async function createEvent(payload: any, isPublished: boolean) {
           name: "Organizer Testing",
           email: "eo@testing.com",
           password: "hashedpassword123",
-          role: "EO",
+          role: { connect: { name: "EO" } },
         },
       });
     }
 
     // 2. MAPPING KATEGORI TIKET (DIPERBARUI DENGAN FITUR KUALIFIKASI)
-    const formattedCategories = (payload.categories || []).map((cat: any) => ({
+    const formattedCategories = (payload.categories || []).map((cat: EventCategoryInput) => ({
       name: cat.name || "Kategori Umum",
-      price: parseFloat(cat.price) || 0,
-      capacity: parseInt(cat.capacity || cat.quota) || 0, // Mengakomodasi jika UI mengirim "quota"
+      price: toNumber(cat.price),
+      capacity: toNumber(cat.capacity ?? cat.quota), // Mengakomodasi jika UI mengirim "quota"
       elevation: cat.elevation || null,
       cot: cat.cot || null,
       description: cat.description || null,
@@ -39,13 +100,13 @@ export async function createEvent(payload: any, isPublished: boolean) {
     }));
 
     // 3. MAPPING ADD-ONS (BARU)
-    const formattedAddons = (payload.addons || []).map((addon: any) => ({
+    const formattedAddons = (payload.addons || []).map((addon: EventAddonInput) => ({
       type: addon.type || "MERCHANDISE", // Default Enum
       name: addon.name || "Addon Tanpa Nama",
-      price: parseFloat(addon.price) || 0,
+      price: toNumber(addon.price),
       capacity:
         addon.capacity || addon.quota
-          ? parseInt(addon.capacity || addon.quota)
+          ? toNumber(addon.capacity ?? addon.quota)
           : null,
       description: addon.description || null,
       imageUrl: addon.imageUrl || null,
@@ -66,7 +127,7 @@ export async function createEvent(payload: any, isPublished: boolean) {
     // 5. SIMPAN EVENT KE DATABASE (Nested Create)
     const newEvent = await prisma.event.create({
       data: {
-        title: payload.title,
+        title: payload.title?.trim() || "Untitled Event",
         category: payload.category || null,
         description: payload.description || "",
         date: new Date(payload.date || Date.now()),
@@ -81,7 +142,7 @@ export async function createEvent(payload: any, isPublished: boolean) {
         rules: payload.rules || null,
         contactName: payload.contactName || null,
         contactPhone: payload.contactPhone || null,
-        customFields: payload.customFields || [],
+        customFields: toJsonValue(payload.customFields),
 
         // Relasi Tiket
         categories:
@@ -104,12 +165,12 @@ export async function createEvent(payload: any, isPublished: boolean) {
       message: "Event berhasil disimpan!",
       data: newEvent,
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("=== DETAIL ERROR PRISMA ===");
     console.error(error);
     return {
       success: false,
-      error: error?.message || "Terjadi kesalahan server saat menyimpan event.",
+      error: error instanceof Error ? error.message : "Terjadi kesalahan server saat menyimpan event.",
     };
   }
 }
@@ -148,7 +209,7 @@ export async function getEvents() {
         locationName: event.location,
         date: event.date.toISOString(),
         time: event.date.toISOString(),
-        bannerUrl: (event as any).imageUrl,
+        bannerUrl: event.imageUrl,
         status: event.isPublished ? "publish" : "draft",
         isPublished: event.isPublished,
         quota: totalQuota,
@@ -158,12 +219,12 @@ export async function getEvents() {
     });
 
     return { success: true, data: formattedEvents };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("=== ERROR GET EVENTS ===");
     console.error(error);
     return {
       success: false,
-      error: error?.message || "Gagal mengambil data event dari database.",
+      error: error instanceof Error ? error.message : "Gagal mengambil data event dari database.",
       data: [],
     };
   }
@@ -177,7 +238,7 @@ export async function deleteEventWithPassword(
   passwordInput: string,
 ) {
   try {
-    const eoUser = await prisma.user.findFirst({ where: { role: "EO" } });
+    const eoUser = await prisma.user.findFirst({ where: { role: { name: "EO" } } });
     if (!eoUser)
       return {
         success: false,
@@ -213,7 +274,7 @@ export async function deleteEventWithPassword(
       success: true,
       message: "Event beserta seluruh kategorinya berhasil dihapus.",
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Gagal menghapus event:", error);
     return {
       success: false,
@@ -239,7 +300,7 @@ export async function getEventById(eventId: string) {
       return { success: false, error: "Event tidak ditemukan di database." };
 
     return { success: true, data: event };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("=== ERROR GET EVENT BY ID ===");
     console.error(error);
     return {
@@ -254,11 +315,11 @@ export async function getEventById(eventId: string) {
 // ============================================================================
 export async function updateEvent(
   eventId: string,
-  payload: any,
+  payload: EventPayload,
   isPublished: boolean,
 ) {
   try {
-    const eoUser = await prisma.user.findFirst({ where: { role: "EO" } });
+    const eoUser = await prisma.user.findFirst({ where: { role: { name: "EO" } } });
     if (!eoUser)
       return {
         success: false,
@@ -266,10 +327,10 @@ export async function updateEvent(
       };
 
     // 1. MAPPING KATEGORI TIKET BARU
-    const formattedCategories = (payload.categories || []).map((cat: any) => ({
+    const formattedCategories = (payload.categories || []).map((cat: EventCategoryInput) => ({
       name: cat.name || "Kategori Umum",
-      price: parseFloat(cat.price) || 0,
-      capacity: parseInt(cat.capacity || cat.quota) || 0,
+      price: toNumber(cat.price),
+      capacity: toNumber(cat.capacity ?? cat.quota),
       elevation: cat.elevation || null,
       cot: cat.cot || null,
       description: cat.description || null,
@@ -278,13 +339,13 @@ export async function updateEvent(
     }));
 
     // 2. MAPPING ADD-ONS BARU
-    const formattedAddons = (payload.addons || []).map((addon: any) => ({
+    const formattedAddons = (payload.addons || []).map((addon: EventAddonInput) => ({
       type: addon.type || "MERCHANDISE",
       name: addon.name || "Addon Tanpa Nama",
-      price: parseFloat(addon.price) || 0,
+      price: toNumber(addon.price),
       capacity:
         addon.capacity || addon.quota
-          ? parseInt(addon.capacity || addon.quota)
+          ? toNumber(addon.capacity ?? addon.quota)
           : null,
       description: addon.description || null,
       imageUrl: addon.imageUrl || null,
@@ -308,7 +369,7 @@ export async function updateEvent(
         eoId: eoUser.id,
       },
       data: {
-        title: payload.title,
+        title: payload.title?.trim() || "Untitled Event",
         category: payload.category || null,
         description: payload.description || "",
         date: new Date(payload.date || Date.now()),
@@ -322,7 +383,7 @@ export async function updateEvent(
         rules: payload.rules || null,
         contactName: payload.contactName || null,
         contactPhone: payload.contactPhone || null,
-        customFields: payload.customFields || [],
+        customFields: toJsonValue(payload.customFields),
 
         // Mengganti total kategori lama dengan yang baru
         categories: {
@@ -347,13 +408,13 @@ export async function updateEvent(
       message: "Event berhasil diperbarui!",
       data: updatedEvent,
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("=== DETAIL ERROR UPDATE EVENT ===");
     console.error(error);
     return {
       success: false,
       error:
-        error?.message || "Terjadi kesalahan server saat memperbarui event.",
+        error instanceof Error ? error.message : "Terjadi kesalahan server saat memperbarui event.",
     };
   }
 }
@@ -377,7 +438,7 @@ export async function updateParticipantStatus(
       message: `Peserta berhasil di-${status.toLowerCase()}!`,
       data: updatedOrder,
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Gagal mengubah status approval:", error);
     return {
       success: false,

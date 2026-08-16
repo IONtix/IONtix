@@ -1,5 +1,6 @@
 import prisma from "@/lib/prisma";
 import { notFound } from "next/navigation";
+import type { Prisma } from "@/generated/prisma/client";
 import OrdersClient from "./OrdersClient";
 
 interface OrdersPageProps {
@@ -9,7 +10,6 @@ interface OrdersPageProps {
 export default async function OrdersPage({ params }: OrdersPageProps) {
   const { eventId } = await params;
 
-  // 1. Ambil detail Event beserta semua data Order/Peserta dan Addons-nya
   const event = await prisma.event.findUnique({
     where: { id: eventId },
     include: {
@@ -23,7 +23,9 @@ export default async function OrdersPage({ params }: OrdersPageProps) {
                 },
               },
             },
-            orderBy: { createdAt: "desc" },
+            orderBy: {
+              createdAt: "desc",
+            },
           },
         },
       },
@@ -34,22 +36,43 @@ export default async function OrdersPage({ params }: OrdersPageProps) {
     notFound();
   }
 
-  // Flattening data orders agar mudah dirender dalam tabel
-  const allOrders = event.categories.flatMap((cat) =>
-    cat.orders.map((order) => ({
-      ...order,
-      categoryName: cat.name,
-      requireApproval: cat.requireApproval,
+  /**
+   * Prisma's JsonValue is the canonical JSON type at the database boundary.
+   * OrdersClient only needs to receive the serialized JSON payload.
+   */
+  const allOrders = event.categories.flatMap((category) =>
+    category.orders.map((order) => ({
+      id: order.id,
+      fullName: order.fullName,
+      email: order.email,
+      phone: order.phone,
+      jerseySize: order.jerseySize,
+      categoryName: category.name,
+      customAnswers:
+        order.customAnswers === null
+          ? null
+          : (order.customAnswers as Prisma.JsonValue),
+      approvalStatus: order.approvalStatus,
+      requireApproval: category.requireApproval,
+      addonOrders: order.addonOrders.map((addonOrder) => ({
+        id: addonOrder.id,
+        quantity: addonOrder.quantity,
+        addon: {
+          id: addonOrder.addon.id,
+          name: addonOrder.addon.name,
+        },
+      })),
     })),
   );
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
+    <div className="mx-auto max-w-7xl space-y-6 p-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">
-          Manajemen Peserta & Order
+          Manajemen Peserta &amp; Order
         </h1>
-        <p className="text-muted-foreground mt-1">
+
+        <p className="mt-1 text-muted-foreground">
           Event:{" "}
           <span className="font-semibold text-foreground">{event.title}</span>
         </p>

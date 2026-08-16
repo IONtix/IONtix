@@ -12,7 +12,7 @@ export default async function DashboardLayout({
   // 1. OTORISASI KEAMANAN: Hanya cek sesi. Tidak perlu lagi mengecek URL halaman login.
   const session = await getServerSession(authOptions);
 
-  if (!session || (session.user as any).role !== "SUPER_ADMIN") {
+  if (!session || session.user.role !== "SUPER_ADMIN") {
     redirect("/super-admin/login");
   }
 
@@ -48,7 +48,7 @@ export default async function DashboardLayout({
                   {session.user?.name || "Admin"}
                 </p>
                 <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                  {(session.user as any).role || "SUPER_ADMIN"}
+                  {session.user.role || "SUPER_ADMIN"}
                 </p>
               </div>
               <div className="h-9 w-9 rounded-full bg-slate-900 flex items-center justify-center text-white font-bold text-sm shadow-md">

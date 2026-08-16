@@ -6,7 +6,6 @@ import {
   MoreHorizontal,
   Calendar,
   MapPin,
-  CheckCircle2,
   Clock,
   Globe,
 } from "lucide-react";
@@ -26,7 +25,7 @@ interface EventData {
   } | null;
 }
 
-export default function EventTable({ initialData }: { initialData: any[] }) {
+export default function EventTable({ initialData }: { initialData: EventData[] }) {
   const [searchTerm, setSearchTerm] = useState("");
 
   // Fitur Filter Real-time (Mencari nama event atau nama EO)
@@ -37,7 +36,7 @@ export default function EventTable({ initialData }: { initialData: any[] }) {
     return eventName.includes(searchLower) || eoName.includes(searchLower);
   });
 
-  const formatDate = (dateValue: any) => {
+  const formatDate = (dateValue: Date | string | undefined) => {
     if (!dateValue) return "Tanggal Belum Ditentukan";
     return new Intl.DateTimeFormat("id-ID", {
       day: "numeric",

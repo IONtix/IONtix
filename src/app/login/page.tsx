@@ -147,8 +147,8 @@ export default function LoginPage() {
             Testimoni Mitra
           </div>
           <h2 className="text-3xl lg:text-4xl font-black leading-[1.2] tracking-tight">
-            "Teknologi IONtix membuat sistem pendaftaran kami lebih cepat, dan
-            QR Check-in mereka luar biasa lancar saat hari H perlombaan."
+            &quot;Teknologi IONtix membuat sistem pendaftaran kami lebih cepat, dan
+            QR Check-in mereka luar biasa lancar saat hari H perlombaan.&quot;
           </h2>
           <div className="flex items-center gap-4 pt-2">
             <div className="w-14 h-14 bg-white/10 rounded-full flex items-center justify-center font-black text-xl backdrop-blur-sm border border-white/20 shadow-lg text-[#F57C00]">

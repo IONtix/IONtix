@@ -1,7 +1,8 @@
 "use server";
 
 import prisma from "@/lib/prisma";
-import { JerseySize, ApprovalStatus } from "@prisma/client";
+import { JerseySize, ApprovalStatus } from "@/generated/prisma/client";
+import type { CheckoutOrderResponse } from "@/lib/platform-types";
 
 // Interface Payload Sesuai yang dikirim dari CheckoutFormClient.tsx
 interface CheckoutPayload {
@@ -13,7 +14,7 @@ interface CheckoutPayload {
     fullName: string;
     email: string;
     phone: string;
-    jerseySize: JerseySize;
+    jerseySize: string;
     bloodType?: string;
     emergencyContact?: string;
     customAnswers: Record<string, string>;
@@ -24,7 +25,7 @@ interface CheckoutPayload {
   }>;
 }
 
-export async function processCheckout(payload: CheckoutPayload) {
+export async function processCheckout(payload: CheckoutPayload): Promise<CheckoutOrderResponse> {
   try {
     // Menggunakan transaksi agar jika 1 gagal, semua di-rollback
     return await prisma.$transaction(async (tx) => {
@@ -68,7 +69,7 @@ export async function processCheckout(payload: CheckoutPayload) {
               email: p.email,
               phone: p.phone,
               password: "defaultpassword123", // Password default
-              role: "PESERTA", // <-- Diperbaiki dari RUNNER
+              role: { connect: { name: "PESERTA" } },
             },
           });
         }
@@ -84,13 +85,16 @@ export async function processCheckout(payload: CheckoutPayload) {
             fullName: p.fullName,
             email: p.email,
             phone: p.phone,
-            jerseySize: p.jerseySize,
+            jerseySize: Object.values(JerseySize).includes(p.jerseySize as JerseySize)
+              ? (p.jerseySize as JerseySize)
+              : null,
             bloodType: p.bloodType || null,
             emergencyContact: p.emergencyContact || null,
             customAnswers: p.customAnswers, // <-- Otomatis disimpan sbg JSON
             totalPrice: category.price,
             ticketCategoryId: category.id,
             approvalStatus: statusApproval,
+            eventId: payload.eventId,
           },
         });
 
@@ -115,7 +119,8 @@ export async function processCheckout(payload: CheckoutPayload) {
               isScanned: false,
               categoryId: category.id,
               transactionId: transaction.id,
-              runnerId: user.id,
+              eventId: payload.eventId,
+              userId: user.id,
             },
           });
         }
@@ -142,11 +147,11 @@ export async function processCheckout(payload: CheckoutPayload) {
         orderIds: createdOrders.map((order) => order.id), // Kembalikan Array ID Order
       };
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("=== ERROR CHECKOUT ===", error);
     return {
       success: false,
-      error: error?.message || "Terjadi kesalahan saat memproses pesanan.",
+      error: error instanceof Error ? error.message : "Terjadi kesalahan saat memproses pesanan.",
     };
   }
 }

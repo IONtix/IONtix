@@ -85,10 +85,12 @@ export default function AddUserModal() {
         // Refresh halaman agar data terbaru langsung muncul di tabel
         router.refresh();
       }, 1500);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error adding user:", error);
       setErrorMsg(
-        error.message || "Gagal menambahkan pengguna. Silakan coba lagi.",
+        error instanceof Error
+          ? error.message
+          : "Gagal menambahkan pengguna. Silakan coba lagi.",
       );
     } finally {
       setIsLoading(false);

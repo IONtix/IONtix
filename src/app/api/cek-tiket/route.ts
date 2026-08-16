@@ -30,7 +30,7 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json({ orders });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error(error);
     return NextResponse.json(
       { error: "Terjadi kesalahan sistem" },

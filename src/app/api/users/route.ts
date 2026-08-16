@@ -1,7 +1,7 @@
 // src/app/api/users/route.ts
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import bcrypt from "bcrypt";
+import bcrypt from "bcryptjs";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 
@@ -9,7 +9,7 @@ export async function POST(req: Request) {
   try {
     // 1. Cek Autentikasi (Hanya Super Admin yang boleh membuat user)
     const session = await getServerSession(authOptions);
-    if (!session?.user || (session.user as any).role !== "SUPER_ADMIN") {
+    if (!session?.user || session.user.role !== "SUPER_ADMIN") {
       return NextResponse.json(
         { message: "Akses ditolak. Hanya Super Admin." },
         { status: 401 },
@@ -57,9 +57,9 @@ export async function POST(req: Request) {
         name,
         email,
         password: hashedPassword,
-        role,
-        // phone,  // Hapus tanda '//' jika field phone sudah ada di schema.prisma
-        // status, // Hapus tanda '//' jika field status sudah ada di schema.prisma
+        role: role ? { connectOrCreate: { where: { name: role }, create: { name: role, isSystem: false } } } : undefined,
+        phone: phone || undefined,
+        status: status || undefined,
       },
     });
 
@@ -67,10 +67,10 @@ export async function POST(req: Request) {
       { message: "Pengguna berhasil ditambahkan!", user: newUser },
       { status: 201 },
     );
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("API Create User Error:", error);
     return NextResponse.json(
-      { message: error.message || "Terjadi kesalahan pada server." },
+      { message: error instanceof Error ? error.message : "Terjadi kesalahan pada server." },
       { status: 500 },
     );
   }

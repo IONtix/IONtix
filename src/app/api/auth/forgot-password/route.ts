@@ -50,7 +50,7 @@ export async function POST(req: Request) {
       resetToken,
       resetUrl, // Berguna saat pengujian di localhost / dev
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Error forgot password:", error);
     return NextResponse.json(
       { error: "Terjadi kesalahan sistem" },

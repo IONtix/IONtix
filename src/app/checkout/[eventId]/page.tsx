@@ -1,6 +1,7 @@
 import prisma from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import CheckoutFormClient from "./CheckoutFormClient";
+import type { CustomFieldDefinition } from "@/lib/platform-types";
 
 interface CheckoutPageProps {
   params: Promise<{ eventId: string }>;
@@ -34,7 +35,7 @@ export default async function CheckoutPage({ params }: CheckoutPageProps) {
 
   // Ambil custom fields dari DB jika ada, jika tidak default ke array kosong
   const customFields = Array.isArray(event.customFields)
-    ? (event.customFields as any[])
+    ? (event.customFields as unknown as CustomFieldDefinition[])
     : [];
 
   return (
