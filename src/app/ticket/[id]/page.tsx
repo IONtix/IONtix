@@ -32,6 +32,10 @@ export default async function TicketPage({
     notFound();
   }
 
+  if (!ticket.category?.event) {
+    notFound();
+  }
+
   const event = ticket.category.event;
 
   const formattedDate = new Date(event.date).toLocaleDateString("id-ID", {

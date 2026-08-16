@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Html5QrcodeScanner } from "html5-qrcode";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
@@ -28,85 +28,183 @@ export default function ScannerPage() {
   } | null>(null);
 
   const scannerRef = useRef<Html5QrcodeScanner | null>(null);
+  const lastScannedRef = useRef<string | null>(null);
+  const isProcessingRef = useRef(false);
+
+  const resetScan = useCallback(() => {
+    setScanResult(null);
+    setOrderDetails(null);
+    setMessage(null);
+    lastScannedRef.current = null;
+    isProcessingRef.current = false;
+  }, []);
 
   const fetchOrderData = useCallback(async (orderId: string) => {
+    if (!orderId || isProcessingRef.current) {
+      return;
+    }
+
+    isProcessingRef.current = true;
     setLoading(true);
     setMessage(null);
     setOrderDetails(null);
 
     try {
-      const res = await fetch(`/api/orders/${orderId}`);
-      const data = await res.json();
+      const res = await fetch(`/api/orders/${encodeURIComponent(orderId)}`, {
+        method: "GET",
+        cache: "no-store",
+      });
+
+      const data = (await res.json()) as OrderDetails | { error?: string };
 
       if (!res.ok) {
         setMessage({
-          text: data.error || "Tiket tidak ditemukan!",
+          text:
+            "error" in data && data.error
+              ? data.error
+              : "Tiket tidak ditemukan!",
           type: "error",
         });
-      } else {
-        setOrderDetails(data as OrderDetails);
+        return;
       }
-    } catch {
-      setMessage({ text: "Gagal menghubungkan ke server.", type: "error" });
+
+      setScanResult(orderId);
+      setOrderDetails(data as OrderDetails);
+
+      /*
+       * Setelah satu QR berhasil dibaca, hentikan kamera
+       * agar callback scanner tidak menembakkan request
+       * berulang kali.
+       */
+      if (scannerRef.current) {
+        try {
+          await scannerRef.current.clear();
+        } catch (error) {
+          console.error("Gagal menghentikan scanner:", error);
+        } finally {
+          scannerRef.current = null;
+        }
+      }
+    } catch (error: unknown) {
+      console.error("Gagal mengambil data order:", error);
+
+      setMessage({
+        text: "Gagal menghubungkan ke server.",
+        type: "error",
+      });
     } finally {
       setLoading(false);
+      isProcessingRef.current = false;
     }
   }, []);
 
   useEffect(() => {
     const scanner = new Html5QrcodeScanner(
       "reader",
-      { fps: 10, qrbox: { width: 250, height: 250 } },
+      {
+        fps: 10,
+        qrbox: {
+          width: 250,
+          height: 250,
+        },
+      },
       false,
     );
 
     scanner.render(
       (decodedText) => {
-        setScanResult(decodedText);
-        void fetchOrderData(decodedText);
+        const normalized = decodedText.trim();
+
+        if (
+          !normalized ||
+          lastScannedRef.current === normalized ||
+          isProcessingRef.current
+        ) {
+          return;
+        }
+
+        lastScannedRef.current = normalized;
+
+        void fetchOrderData(normalized);
       },
       () => {
-        // Ignore per-frame scan errors.
+        /*
+         * html5-qrcode memanggil callback error
+         * pada banyak frame yang bukan QR valid.
+         * Tidak perlu ditampilkan ke user.
+         */
       },
     );
 
     scannerRef.current = scanner;
 
     return () => {
-      scanner
+      void scanner
         .clear()
-        .catch((error) => console.error("Failed to clear scanner", error));
+        .catch((error: unknown) =>
+          console.error("Failed to clear scanner", error),
+        );
+
       scannerRef.current = null;
     };
   }, [fetchOrderData]);
 
-  // Fungsi konfirmasi verifikasi Racepack
   async function handleClaimRacepack() {
-    if (!scanResult) return;
+    if (!scanResult || !orderDetails || orderDetails.isClaimed || loading) {
+      return;
+    }
+
     setLoading(true);
+    setMessage(null);
 
     try {
-      const res = await fetch(`/api/orders/${scanResult}/claim`, {
-        method: "POST",
-      });
-      const data = await res.json();
+      const res = await fetch(
+        `/api/orders/${encodeURIComponent(scanResult)}/claim`,
+        {
+          method: "POST",
+        },
+      );
+
+      const data = (await res.json()) as {
+        error?: string;
+      };
 
       if (res.ok) {
         setMessage({
           text: "✅ VERIFIKASI BERHASIL! Racepack dapat diberikan.",
           type: "success",
         });
-        if (orderDetails) {
-          setOrderDetails({ ...orderDetails, isClaimed: true });
-        }
+
+        setOrderDetails((current) =>
+          current
+            ? {
+                ...current,
+                isClaimed: true,
+              }
+            : null,
+        );
       } else {
         setMessage({
           text: data.error || "Gagal memverifikasi tiket.",
           type: "error",
         });
+
+        /*
+         * Jika claim ditolak karena tiket sudah diambil
+         * secara bersamaan di perangkat lain, refresh data
+         * order agar status UI tetap benar.
+         */
+        if (res.status === 409) {
+          await fetchOrderData(scanResult);
+        }
       }
-    } catch {
-      setMessage({ text: "Terjadi kesalahan.", type: "error" });
+    } catch (error: unknown) {
+      console.error("Gagal melakukan claim:", error);
+
+      setMessage({
+        text: "Terjadi kesalahan.",
+        type: "error",
+      });
     } finally {
       setLoading(false);
     }
@@ -114,61 +212,73 @@ export default function ScannerPage() {
 
   return (
     <div className="min-h-screen bg-background p-6">
-      <div className="max-w-xl mx-auto space-y-6">
+      <div className="mx-auto max-w-xl space-y-6">
         <div>
           <Link
             href="/dashboard"
-            className="text-sm text-muted-foreground hover:text-primary transition-colors mb-2 inline-block"
+            className="mb-2 inline-block text-sm text-muted-foreground transition-colors hover:text-primary"
           >
             &larr; Kembali ke Dashboard
           </Link>
+
           <h1 className="text-3xl font-black tracking-tight">
             Panitia QR Scanner
           </h1>
+
           <p className="text-sm text-muted-foreground">
             Arahkan kamera ke E-Ticket peserta untuk verifikasi Racepack /
             Check-in.
           </p>
         </div>
 
-        {/* Box Kamera Scanner */}
-        <div className="bg-card border border-border/60 rounded-3xl p-4 shadow-sm overflow-hidden">
-          <div id="reader" className="w-full rounded-2xl overflow-hidden"></div>
+        <div className="overflow-hidden rounded-3xl border border-border/60 bg-card p-4 shadow-sm">
+          {!orderDetails && (
+            <div id="reader" className="w-full overflow-hidden rounded-2xl" />
+          )}
+
+          {orderDetails && (
+            <button
+              type="button"
+              onClick={resetScan}
+              className="w-full rounded-xl border border-border bg-muted/30 px-4 py-3 text-sm font-bold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              Scan Tiket Berikutnya
+            </button>
+          )}
         </div>
 
-        {/* Status Loading */}
         {loading && (
-          <div className="text-center p-4 bg-muted/40 rounded-2xl animate-pulse text-sm font-semibold">
+          <div className="animate-pulse rounded-2xl bg-muted/40 p-4 text-center text-sm font-semibold">
             Memproses data tiket...
           </div>
         )}
 
-        {/* Status Pesan Error / Sukses */}
         {message && (
           <div
-            className={`p-4 rounded-2xl text-center text-sm font-bold shadow-sm ${
+            className={`rounded-2xl border p-4 text-center text-sm font-bold shadow-sm ${
               message.type === "success"
-                ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/30"
-                : "bg-destructive/10 text-destructive border border-destructive/30"
+                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-600"
+                : "border-destructive/30 bg-destructive/10 text-destructive"
             }`}
           >
             {message.text}
           </div>
         )}
 
-        {/* Hasil Detail Tiket Peserta */}
         {orderDetails && (
-          <div className="bg-card border-2 border-primary/20 rounded-3xl p-6 shadow-md space-y-4">
-            <div className="flex justify-between items-start border-b border-border/40 pb-3">
+          <div className="space-y-4 rounded-3xl border-2 border-primary/20 bg-card p-6 shadow-md">
+            <div className="flex items-start justify-between border-b border-border/40 pb-3">
               <div>
-                <span className="text-[10px] bg-primary/10 text-primary font-bold px-2 py-0.5 rounded-md uppercase">
+                <span className="rounded-md bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase text-primary">
                   {orderDetails.ticketCategory.event.title}
                 </span>
-                <h3 className="text-xl font-black mt-1">
+
+                <h3 className="mt-1 text-xl font-black">
                   {orderDetails.fullName}
                 </h3>
               </div>
-              <span className="text-xs font-bold border px-2.5 py-1 rounded-lg">
+
+              <span className="rounded-lg border px-2.5 py-1 text-xs font-bold">
                 Kategori: {orderDetails.ticketCategory.name}
               </span>
             </div>
@@ -176,14 +286,16 @@ export default function ScannerPage() {
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
                 <p className="text-xs text-muted-foreground">Ukuran Jersey</p>
-                <p className="font-extrabold text-2xl text-primary">
-                  {orderDetails.jerseySize}
+                <p className="text-2xl font-extrabold text-primary">
+                  {orderDetails.jerseySize || "-"}
                 </p>
               </div>
+
               <div>
                 <p className="text-xs text-muted-foreground">Status Racepack</p>
+
                 <p
-                  className={`font-bold text-sm mt-1 ${
+                  className={`mt-1 text-sm font-bold ${
                     orderDetails.isClaimed
                       ? "text-emerald-600"
                       : "text-amber-600"
@@ -198,14 +310,14 @@ export default function ScannerPage() {
 
             <div className="pt-2">
               {orderDetails.isClaimed ? (
-                <div className="w-full p-3 bg-muted rounded-xl text-center text-xs text-muted-foreground font-medium">
+                <div className="w-full rounded-xl bg-muted p-3 text-center text-xs font-medium text-muted-foreground">
                   Peserta ini sudah mengambil racepack sebelumnya.
                 </div>
               ) : (
                 <Button
-                  onClick={handleClaimRacepack}
+                  onClick={() => void handleClaimRacepack()}
                   disabled={loading}
-                  className="w-full font-bold size-lg shadow-md"
+                  className="w-full font-bold shadow-md"
                 >
                   Serahkan Racepack & Tandai Selesai &rarr;
                 </Button>
