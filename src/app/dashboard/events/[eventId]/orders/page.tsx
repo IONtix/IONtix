@@ -1,6 +1,10 @@
-import prisma from "@/lib/prisma";
 import { notFound } from "next/navigation";
+
+import prisma from "@/lib/prisma";
 import type { Prisma } from "@/generated/prisma/client";
+
+import { requireEventAccess } from "@/lib/auth/organization";
+
 import OrdersClient from "./OrdersClient";
 
 interface OrdersPageProps {
@@ -9,6 +13,17 @@ interface OrdersPageProps {
 
 export default async function OrdersPage({ params }: OrdersPageProps) {
   const { eventId } = await params;
+
+  /*
+   * Authorization is performed before loading any order data.
+   * Unauthorized users receive the same not-found boundary
+   * instead of leaking whether the event exists.
+   */
+  try {
+    await requireEventAccess(eventId);
+  } catch {
+    notFound();
+  }
 
   const event = await prisma.event.findUnique({
     where: { id: eventId },
@@ -36,16 +51,12 @@ export default async function OrdersPage({ params }: OrdersPageProps) {
     notFound();
   }
 
-  /**
-   * Prisma's JsonValue is the canonical JSON type at the database boundary.
-   * OrdersClient only needs to receive the serialized JSON payload.
-   */
   const allOrders = event.categories.flatMap((category) =>
     category.orders.map((order) => ({
       id: order.id,
       fullName: order.fullName,
       email: order.email,
-      phone: order.phone,
+      phone: order.phone ?? "",
       jerseySize: order.jerseySize,
       categoryName: category.name,
       customAnswers:

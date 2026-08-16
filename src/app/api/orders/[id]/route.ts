@@ -1,34 +1,90 @@
 import { NextResponse } from "next/server";
+
 import prisma from "@/lib/prisma";
+import {
+  authorizationErrorResponse,
+  requireAuth,
+} from "@/lib/auth/authorization";
+import { requireEventAccess } from "@/lib/auth/organization";
+import { AuthorizationError } from "@/lib/auth/authorization";
 
-export async function GET(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
-  const { id } = await params;
+type RouteContext = {
+  params: Promise<{ id: string }>;
+};
 
-  const order = await prisma.order.findUnique({
-    where: { id },
-    include: {
-      ticketCategory: {
-        include: {
-          event: true,
-        },
-      },
-      addonOrders: {
-        include: {
-          addon: true, // <-- BARU: Mengambil detail Add-on (nama, tipe, harga)
-        },
-      },
-    },
-  });
+async function assertOrderAccess(orderEmail: string | null, eventId: string) {
+  const user = await requireAuth();
 
-  if (!order) {
-    return NextResponse.json(
-      { error: "Pesanan tidak ditemukan!" },
-      { status: 404 },
-    );
+  /*
+   * Event owner/member or SUPER_ADMIN may access the order.
+   */
+  try {
+    await requireEventAccess(eventId);
+    return user;
+  } catch (error) {
+    /*
+     * If the user is not an event manager, allow the
+     * participant to access only their own order.
+     */
+    if (
+      error instanceof AuthorizationError &&
+      orderEmail &&
+      user.email.toLowerCase() === orderEmail.toLowerCase()
+    ) {
+      return user;
+    }
+
+    throw error;
   }
+}
 
-  return NextResponse.json(order);
+export async function GET(_request: Request, { params }: RouteContext) {
+  try {
+    const { id } = await params;
+
+    if (!id) {
+      return NextResponse.json(
+        { error: "ID pesanan tidak ditemukan." },
+        { status: 400 },
+      );
+    }
+
+    const order = await prisma.order.findUnique({
+      where: { id },
+      include: {
+        ticketCategory: {
+          include: {
+            event: true,
+          },
+        },
+        addonOrders: {
+          include: {
+            addon: true,
+          },
+        },
+      },
+    });
+
+    if (!order) {
+      return NextResponse.json(
+        { error: "Pesanan tidak ditemukan!" },
+        { status: 404 },
+      );
+    }
+
+    if (!order.ticketCategory) {
+      return NextResponse.json(
+        { error: "Kategori tiket untuk pesanan ini tidak ditemukan." },
+        { status: 409 },
+      );
+    }
+
+    await assertOrderAccess(order.email, order.ticketCategory.event.id);
+
+    return NextResponse.json(order);
+  } catch (error: unknown) {
+    console.error("GET /api/orders/[id] error:", error);
+
+    return authorizationErrorResponse(error);
+  }
 }

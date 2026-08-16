@@ -1,9 +1,12 @@
 "use client";
 
 import { useState } from "react";
+
 import { Button } from "@/components/ui/button";
 import { updateParticipantStatus } from "@/app/actions/event";
-import type { OrderRow, JsonObject } from "@/lib/platform-types";
+
+import type { JsonObject, OrderRow } from "@/lib/platform-types";
+
 import {
   CheckCircle2,
   XCircle,
@@ -13,29 +16,56 @@ import {
 } from "lucide-react";
 
 export default function OrdersClient({ orders }: { orders: OrderRow[] }) {
+  const [rows, setRows] = useState<OrderRow[]>(orders);
+
   const [loadingId, setLoadingId] = useState<string | null>(null);
 
   const handleStatusChange = async (
     orderId: string,
     status: "APPROVED" | "REJECTED",
   ) => {
-    if (!confirm(`Apakah Anda yakin ingin mengubah status menjadi ${status}?`))
+    const confirmed = window.confirm(
+      `Apakah Anda yakin ingin mengubah status menjadi ${status}?`,
+    );
+
+    if (!confirmed) {
       return;
+    }
 
     setLoadingId(orderId);
-    const res = await updateParticipantStatus(orderId, status);
-    setLoadingId(null);
 
-    if (!res.success) {
-      alert(res.error);
+    try {
+      const result = await updateParticipantStatus(orderId, status);
+
+      if (!result.success) {
+        window.alert(result.error ?? "Gagal memperbarui status peserta.");
+        return;
+      }
+
+      setRows((currentRows) =>
+        currentRows.map((row) =>
+          row.id === orderId
+            ? {
+                ...row,
+                approvalStatus: status,
+              }
+            : row,
+        ),
+      );
+    } catch (error: unknown) {
+      console.error("Gagal memperbarui status peserta:", error);
+
+      window.alert("Terjadi kesalahan saat memperbarui status peserta.");
+    } finally {
+      setLoadingId(null);
     }
   };
 
   return (
-    <div className="bg-card border border-border/60 rounded-2xl overflow-hidden shadow-sm">
+    <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm">
       <div className="overflow-x-auto">
-        <table className="w-full text-sm text-left">
-          <thead className="bg-muted/50 text-muted-foreground uppercase text-[11px] font-bold tracking-wider border-b border-border/50">
+        <table className="w-full text-left text-sm">
+          <thead className="border-b border-border/50 bg-muted/50 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
             <tr>
               <th className="p-4">Peserta</th>
               <th className="p-4">Kategori Tiket</th>
@@ -45,8 +75,9 @@ export default function OrdersClient({ orders }: { orders: OrderRow[] }) {
               <th className="p-4 text-right">Aksi</th>
             </tr>
           </thead>
+
           <tbody className="divide-y divide-border/40">
-            {orders.length === 0 ? (
+            {rows.length === 0 ? (
               <tr>
                 <td
                   colSpan={6}
@@ -56,118 +87,130 @@ export default function OrdersClient({ orders }: { orders: OrderRow[] }) {
                 </td>
               </tr>
             ) : (
-              orders.map((order) => {
+              rows.map((order) => {
                 const customAnswers =
-                  (order.customAnswers as JsonObject) || {};
+                  order.customAnswers &&
+                  typeof order.customAnswers === "object" &&
+                  !Array.isArray(order.customAnswers)
+                    ? (order.customAnswers as JsonObject)
+                    : {};
 
                 return (
                   <tr
                     key={order.id}
-                    className="hover:bg-muted/20 transition-colors"
+                    className="transition-colors hover:bg-muted/20"
                   >
-                    {/* Data Peserta */}
                     <td className="p-4 font-medium">
                       <div className="font-bold text-foreground">
                         {order.fullName}
                       </div>
+
                       <div className="text-xs text-muted-foreground">
                         {order.email}
                       </div>
+
                       <div className="text-xs text-muted-foreground">
                         {order.phone}
                       </div>
                     </td>
 
-                    {/* Kategori Tiket */}
                     <td className="p-4">
                       <span className="font-semibold">
                         {order.categoryName}
                       </span>
+
                       <div className="text-xs text-muted-foreground">
-                        Size: {order.jerseySize}
+                        Size: {order.jerseySize ?? "-"}
                       </div>
                     </td>
 
-                    {/* Jawaban Custom Fields / Strava Link */}
-                    <td className="p-4 max-w-xs">
+                    <td className="max-w-xs p-4">
                       {Object.keys(customAnswers).length > 0 ? (
                         <div className="space-y-1 text-xs">
-                          {Object.entries(customAnswers).map(
-                            ([key, value]: [string, unknown]) => (
-                              <div key={key} className="truncate">
-                                <span className="font-semibold text-muted-foreground">
-                                  {key}:{" "}
+                          {Object.entries(customAnswers).map(([key, value]) => (
+                            <div key={key} className="truncate">
+                              <span className="font-semibold text-muted-foreground">
+                                {key}:{" "}
+                              </span>
+
+                              {typeof value === "string" &&
+                              value.startsWith("http") ? (
+                                <a
+                                  href={value}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex items-center gap-1 font-bold text-primary hover:underline"
+                                >
+                                  Cek Bukti <ExternalLink size={11} />
+                                </a>
+                              ) : (
+                                <span>
+                                  {typeof value === "object"
+                                    ? JSON.stringify(value)
+                                    : String(value)}
                                 </span>
-                                {typeof value === "string" &&
-                                value.startsWith("http") ? (
-                                  <a
-                                    href={value}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="text-primary hover:underline inline-flex items-center gap-1 font-bold"
-                                  >
-                                    Cek Bukti <ExternalLink size={11} />
-                                  </a>
-                                ) : (
-                                  <span>{String(value)}</span>
-                                )}
-                              </div>
-                            ),
-                          )}
+                              )}
+                            </div>
+                          ))}
                         </div>
                       ) : (
-                        <span className="text-xs text-muted-foreground italic">
+                        <span className="text-xs italic text-muted-foreground">
                           - Tidak ada -
                         </span>
                       )}
                     </td>
 
-                    {/* Modul Add-ons */}
                     <td className="p-4">
                       {order.addonOrders && order.addonOrders.length > 0 ? (
                         <div className="space-y-1">
-                          {order.addonOrders?.map((ao) => (
+                          {order.addonOrders.map((addonOrder) => (
                             <div
-                              key={ao.id}
-                              className="text-xs flex items-center gap-1.5 font-medium"
+                              key={addonOrder.id}
+                              className="flex items-center gap-1.5 text-xs font-medium"
                             >
                               <Package size={12} className="text-primary" />
-                              <span>{ao.addon.name}</span>
+
+                              <span>{addonOrder.addon.name}</span>
+
                               <span className="text-muted-foreground">
-                                x{ao.quantity}
+                                x{addonOrder.quantity}
                               </span>
                             </div>
                           ))}
                         </div>
                       ) : (
-                        <span className="text-xs text-muted-foreground italic">
+                        <span className="text-xs italic text-muted-foreground">
                           -
                         </span>
                       )}
                     </td>
 
-                    {/* Status Approval */}
                     <td className="p-4">
                       {order.approvalStatus === "APPROVED" && (
-                        <span className="inline-flex items-center gap-1 bg-green-500/10 text-green-600 dark:text-green-400 text-xs font-bold px-2.5 py-1 rounded-full">
-                          <CheckCircle2 size={13} /> Approved
+                        <span className="inline-flex items-center gap-1 rounded-full bg-green-500/10 px-2.5 py-1 text-xs font-bold text-green-600 dark:text-green-400">
+                          <CheckCircle2 size={13} />
+                          Approved
                         </span>
                       )}
+
                       {order.approvalStatus === "REJECTED" && (
-                        <span className="inline-flex items-center gap-1 bg-red-500/10 text-red-600 dark:text-red-400 text-xs font-bold px-2.5 py-1 rounded-full">
-                          <XCircle size={13} /> Rejected
+                        <span className="inline-flex items-center gap-1 rounded-full bg-red-500/10 px-2.5 py-1 text-xs font-bold text-red-600 dark:text-red-400">
+                          <XCircle size={13} />
+                          Rejected
                         </span>
                       )}
+
                       {(order.approvalStatus === "PENDING" ||
-                        order.approvalStatus === "NONE") && (
-                        <span className="inline-flex items-center gap-1 bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs font-bold px-2.5 py-1 rounded-full">
-                          <Clock size={13} /> Pending Review
+                        order.approvalStatus === "NONE" ||
+                        !order.approvalStatus) && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-1 text-xs font-bold text-amber-600 dark:text-amber-400">
+                          <Clock size={13} />
+                          Pending Review
                         </span>
                       )}
                     </td>
 
-                    {/* Tombol Aksi */}
-                    <td className="p-4 text-right space-x-2">
+                    <td className="space-x-2 p-4 text-right">
                       <Button
                         size="sm"
                         variant="outline"
@@ -176,10 +219,13 @@ export default function OrdersClient({ orders }: { orders: OrderRow[] }) {
                           loadingId === order.id ||
                           order.approvalStatus === "APPROVED"
                         }
-                        onClick={() => handleStatusChange(order.id, "APPROVED")}
+                        onClick={() =>
+                          void handleStatusChange(order.id, "APPROVED")
+                        }
                       >
                         Approve
                       </Button>
+
                       <Button
                         size="sm"
                         variant="outline"
@@ -188,7 +234,9 @@ export default function OrdersClient({ orders }: { orders: OrderRow[] }) {
                           loadingId === order.id ||
                           order.approvalStatus === "REJECTED"
                         }
-                        onClick={() => handleStatusChange(order.id, "REJECTED")}
+                        onClick={() =>
+                          void handleStatusChange(order.id, "REJECTED")
+                        }
                       >
                         Reject
                       </Button>

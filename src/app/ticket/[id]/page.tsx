@@ -89,10 +89,10 @@ export default async function TicketPage({
       {/* PROFESSIONAL VIP TICKET PASS */}
       <div
         id="ticket-node"
-        className="relative z-10 w-full max-w-90 overflow-hidden rounded-[2.2rem] border border-slate-700/70 bg-gradient-to-b from-[#0F172A] via-[#0D1527] to-[#0A0F1D] shadow-2xl sm:max-w-md"
+        className="relative z-10 w-full max-w-90 overflow-hidden rounded-[2.2rem] border border-slate-700/70 bg-linear-to-b from-[#0F172A] via-[#0D1527] to-[#0A0F1D] shadow-2xl sm:max-w-md"
       >
         {/* Top Metallic Gold Accent Bar */}
-        <div className="h-1.5 w-full bg-gradient-to-r from-amber-500 via-[#F57C00] to-emerald-500" />
+        <div className="h-1.5 w-full bg-linear-to-r from-amber-500 via-[#F57C00] to-emerald-500" />
 
         {/* TICKET HEADER / BRANDING */}
         <div className="flex items-center justify-between border-b border-slate-800/80 bg-slate-900/80 px-5 py-4">
@@ -122,7 +122,7 @@ export default async function TicketPage({
         <div className="space-y-4 p-5 sm:p-6">
           {/* Badge & Event Title */}
           <div>
-            <div className="mb-2.5 inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-[#F57C00] to-amber-600 px-3 py-1 text-[9px] font-black uppercase tracking-wider text-white shadow-md shadow-orange-500/20 sm:text-[10px]">
+            <div className="mb-2.5 inline-flex items-center gap-1.5 rounded-lg bg-linear-to-r from-[#F57C00] to-amber-600 px-3 py-1 text-[9px] font-black uppercase tracking-wider text-white shadow-md shadow-orange-500/20 sm:text-[10px]">
               <span>KATEGORI</span>
               <span className="opacity-40">•</span>
               <span>{ticket.category.name}</span>

@@ -76,7 +76,7 @@ export default function DashboardLayout({
                 href={item.href}
                 className={`group flex items-center gap-3 rounded-xl px-4 py-3.5 transition-all duration-300 ${
                   isActive
-                    ? "border-l-2 border-[#F57C00] bg-gradient-to-r from-[#F57C00]/10 to-transparent text-white"
+                    ? "border-l-2 border-[#F57C00] bg-linear-to-r from-[#F57C00]/10 to-transparent text-white"
                     : "text-slate-400 hover:bg-slate-800/50 hover:text-slate-200"
                 }`}
               >
@@ -104,7 +104,7 @@ export default function DashboardLayout({
             onClick={handleLogout}
             className="group flex w-full items-center gap-3 rounded-xl border border-slate-800 bg-slate-900 p-3 text-left transition-all hover:border-red-900/50 hover:bg-red-950/20"
           >
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#F57C00] to-amber-600 text-sm font-black text-white shadow-md">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-[#F57C00] to-amber-600 text-sm font-black text-white shadow-md">
               EO
             </div>
             <div className="min-w-0 flex-1">
@@ -144,7 +144,7 @@ export default function DashboardLayout({
           />
         </div>
 
-        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-[#F57C00] to-amber-600 text-xs font-bold text-white">
+        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-linear-to-br from-[#F57C00] to-amber-600 text-xs font-bold text-white">
           EO
         </div>
       </div>
