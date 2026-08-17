@@ -111,10 +111,20 @@ export interface CheckoutParticipantData {
   addonIds?: string[];
 }
 
+export interface CheckoutPaymentSession {
+  orderId: string;
+  externalId: string;
+  checkoutUrl: string | null;
+  token: string | null;
+  status: string;
+  expiresAt?: DateLike | null;
+}
+
 export interface CheckoutOrderSuccessResponse {
   success: true;
   message: string;
   orderIds: string[];
+  paymentSessions: CheckoutPaymentSession[];
 }
 
 export interface CheckoutOrderErrorResponse {
@@ -264,17 +274,34 @@ export interface FinanceTransaction {
   } | null;
 }
 
+export interface SuperAdminRole {
+  id: string;
+  name: string;
+  isSystem?: boolean;
+}
+
+export interface SuperAdminOrganization {
+  id: string;
+  name: string;
+  slug?: string;
+  status?: string;
+}
+
 export interface SuperAdminUser {
   id: string;
   name: string | null;
   email: string;
+  phone?: string | null;
 
-  role?: {
-    name: string;
-  } | null;
+  role?: SuperAdminRole | null;
 
   status?: string | null;
+  isDeleted?: boolean;
+  emailVerifiedAt?: DateLike | null;
   createdAt?: DateLike | null;
+  updatedAt?: DateLike | null;
+
+  organizations?: SuperAdminOrganization[];
 }
 
 /* -------------------------------------------------------------------------- */

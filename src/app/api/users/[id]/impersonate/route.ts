@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import {
   authorizationErrorResponse,
-  requireSuperAdmin,
+  requirePermission,
 } from "@/lib/auth/authorization";
 
 type RouteContext = {
@@ -12,7 +12,7 @@ type RouteContext = {
 
 export async function POST(_request: Request, { params }: RouteContext) {
   try {
-    const actor = await requireSuperAdmin();
+    const actor = await requirePermission("users.manage");
 
     const { id } = await params;
 
@@ -36,7 +36,9 @@ export async function POST(_request: Request, { params }: RouteContext) {
     }
 
     const targetUser = await prisma.user.findUnique({
-      where: { id },
+      where: {
+        id,
+      },
       select: {
         id: true,
         name: true,
@@ -45,6 +47,7 @@ export async function POST(_request: Request, { params }: RouteContext) {
         isDeleted: true,
         role: {
           select: {
+            id: true,
             name: true,
           },
         },
@@ -69,6 +72,10 @@ export async function POST(_request: Request, { params }: RouteContext) {
       );
     }
 
+    /*
+     * SUPER_ADMIN tidak boleh diimpersonasi
+     * melalui workflow standar ini.
+     */
     if (targetUser.role?.name === "SUPER_ADMIN") {
       return NextResponse.json(
         {
@@ -80,6 +87,13 @@ export async function POST(_request: Request, { params }: RouteContext) {
 
     const roleName = targetUser.role?.name ?? "PESERTA";
 
+    /*
+     * Redirect masih berdasarkan role sementara.
+     *
+     * Nanti ketika workspace EO/Peserta sudah sepenuhnya
+     * modular, redirect ini kita pindahkan ke centralized
+     * role/workspace configuration agar tidak hard-coded.
+     */
     let redirectUrl = "/";
 
     if (roleName === "EO") {
@@ -88,23 +102,30 @@ export async function POST(_request: Request, { params }: RouteContext) {
       redirectUrl = "/";
     }
 
-    await prisma.adminAction.create({
-      data: {
-        actorUserId: actor.id,
-        action: "IMPERSONATION_REQUESTED",
-        targetType: "User",
-        targetId: targetUser.id,
-        reason: "Super Admin meminta impersonation terhadap user.",
-        metadata: {
-          targetEmail: targetUser.email,
-          targetRole: roleName,
-          redirectUrl,
+    await prisma.$transaction(async (tx) => {
+      await tx.auditLog.create({
+        data: {
+          actorUserId: actor.id,
+          action: "IMPERSONATION_REQUESTED",
+          module: "security",
+          entityType: "User",
+          entityId: targetUser.id,
+          metadata: {
+            actorUserId: actor.id,
+            actorEmail: actor.email,
+            targetUserId: targetUser.id,
+            targetEmail: targetUser.email,
+            targetRole: roleName,
+            redirectUrl,
+            sessionCreated: false,
+          },
         },
-      },
+      });
     });
 
     return NextResponse.json(
       {
+        success: true,
         message:
           "Permintaan impersonation telah dicatat. Session impersonation belum diaktifkan.",
         redirectUrl,

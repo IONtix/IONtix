@@ -4,16 +4,20 @@ import bcrypt from "bcryptjs";
 import prisma from "@/lib/prisma";
 import {
   authorizationErrorResponse,
-  requireSuperAdmin,
+  requirePermission,
 } from "@/lib/auth/authorization";
 
-const ALLOWED_ROLES = new Set(["SUPER_ADMIN", "EO", "PESERTA", "USER"]);
+import { UserStatus } from "@/generated/prisma/client";
 
-const ALLOWED_STATUSES = new Set(["ACTIVE", "SUSPENDED", "PENDING", "DELETED"]);
+const CREATEABLE_STATUSES = new Set<UserStatus>([
+  UserStatus.ACTIVE,
+  UserStatus.SUSPENDED,
+  UserStatus.PENDING,
+]);
 
 export async function POST(req: Request) {
   try {
-    await requireSuperAdmin();
+    const actor = await requirePermission("users.manage");
 
     const body = await req.json();
 
@@ -24,18 +28,17 @@ export async function POST(req: Request) {
 
     const password = typeof body.password === "string" ? body.password : "";
 
-    const role =
+    const roleName =
       typeof body.role === "string"
         ? body.role.trim().toUpperCase()
         : "PESERTA";
 
-    const phone =
-      typeof body.phone === "string" ? body.phone.trim() : undefined;
+    const phone = typeof body.phone === "string" ? body.phone.trim() : null;
 
-    const status =
+    const requestedStatus =
       typeof body.status === "string"
         ? body.status.trim().toUpperCase()
-        : "ACTIVE";
+        : UserStatus.ACTIVE;
 
     if (!name || !email || !password) {
       return NextResponse.json(
@@ -55,16 +58,7 @@ export async function POST(req: Request) {
       );
     }
 
-    if (!ALLOWED_ROLES.has(role)) {
-      return NextResponse.json(
-        {
-          message: "Role pengguna tidak valid.",
-        },
-        { status: 400 },
-      );
-    }
-
-    if (!ALLOWED_STATUSES.has(status)) {
+    if (!Object.values(UserStatus).includes(requestedStatus as UserStatus)) {
       return NextResponse.json(
         {
           message: "Status pengguna tidak valid.",
@@ -73,9 +67,24 @@ export async function POST(req: Request) {
       );
     }
 
+    const status = requestedStatus as UserStatus;
+
+    if (!CREATEABLE_STATUSES.has(status)) {
+      return NextResponse.json(
+        {
+          message: "User baru tidak dapat dibuat dengan status DELETED.",
+        },
+        { status: 400 },
+      );
+    }
+
     const existingUser = await prisma.user.findUnique({
-      where: { email },
-      select: { id: true },
+      where: {
+        email,
+      },
+      select: {
+        id: true,
+      },
     });
 
     if (existingUser) {
@@ -87,62 +96,117 @@ export async function POST(req: Request) {
       );
     }
 
+    /*
+     * Role sekarang bersumber dari database.
+     * Tidak ada lagi hard-coded ALLOWED_ROLES.
+     */
     const roleRecord = await prisma.role.findUnique({
-      where: { name: role },
+      where: {
+        name: roleName,
+      },
       select: {
         id: true,
         name: true,
+        isSystem: true,
       },
     });
 
     if (!roleRecord) {
       return NextResponse.json(
         {
-          message:
-            "Role belum dikonfigurasi. Buat role terlebih dahulu melalui seed atau administrasi sistem.",
+          message: `Role "${roleName}" tidak ditemukan.`,
         },
         { status: 400 },
       );
     }
 
+    /*
+     * SUPER_ADMIN adalah privilege platform-level.
+     * Membuat user dengan role SUPER_ADMIN
+     * membutuhkan roles.manage.
+     */
+    if (
+      roleRecord.name === "SUPER_ADMIN" &&
+      actor.role !== "SUPER_ADMIN" &&
+      !actor.permissions.includes("roles.manage")
+    ) {
+      return NextResponse.json(
+        {
+          message:
+            "Permission roles.manage diperlukan untuk membuat user SUPER_ADMIN.",
+        },
+        { status: 403 },
+      );
+    }
+
     const hashedPassword = await bcrypt.hash(password, 12);
 
-    const newUser = await prisma.user.create({
-      data: {
-        name,
-        email,
-        password: hashedPassword,
-        phone: phone || null,
-        status: status as "ACTIVE" | "SUSPENDED" | "PENDING" | "DELETED",
-        role: {
-          connect: {
-            id: roleRecord.id,
+    /*
+     * User + audit log dibuat dalam satu
+     * database transaction.
+     */
+    const createdUser = await prisma.$transaction(async (tx) => {
+      const newUser = await tx.user.create({
+        data: {
+          name,
+          email,
+          password: hashedPassword,
+          phone: phone || null,
+          status,
+          role: {
+            connect: {
+              id: roleRecord.id,
+            },
           },
         },
-      },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        phone: true,
-        status: true,
-        isDeleted: true,
-        emailVerifiedAt: true,
-        createdAt: true,
-        updatedAt: true,
-        role: {
-          select: {
-            id: true,
-            name: true,
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phone: true,
+          status: true,
+          isDeleted: true,
+          emailVerifiedAt: true,
+          createdAt: true,
+          updatedAt: true,
+          role: {
+            select: {
+              id: true,
+              name: true,
+            },
           },
         },
-      },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          actorUserId: actor.id,
+          action: "USER_CREATE",
+          module: "users",
+          entityType: "User",
+          entityId: newUser.id,
+          afterData: {
+            id: newUser.id,
+            name: newUser.name,
+            email: newUser.email,
+            phone: newUser.phone,
+            status: newUser.status,
+            role: newUser.role?.name ?? null,
+          },
+          metadata: {
+            createdBy: actor.email,
+            assignedRole: roleRecord.name,
+          },
+        },
+      });
+
+      return newUser;
     });
 
     return NextResponse.json(
       {
         message: "Pengguna berhasil ditambahkan!",
-        user: newUser,
+        user: createdUser,
       },
       { status: 201 },
     );

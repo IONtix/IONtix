@@ -4,7 +4,7 @@ import crypto from "node:crypto";
 import prisma from "@/lib/prisma";
 import {
   authorizationErrorResponse,
-  requireSuperAdmin,
+  requirePermission,
 } from "@/lib/auth/authorization";
 
 type RouteContext = {
@@ -15,7 +15,7 @@ const RESET_TOKEN_TTL_MS = 1000 * 60 * 30;
 
 export async function POST(_request: Request, { params }: RouteContext) {
   try {
-    const actor = await requireSuperAdmin();
+    const actor = await requirePermission("users.manage");
 
     const { id } = await params;
 
@@ -39,13 +39,21 @@ export async function POST(_request: Request, { params }: RouteContext) {
     }
 
     const targetUser = await prisma.user.findUnique({
-      where: { id },
+      where: {
+        id,
+      },
       select: {
         id: true,
         name: true,
         email: true,
         status: true,
         isDeleted: true,
+        role: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
       },
     });
 
@@ -77,35 +85,62 @@ export async function POST(_request: Request, { params }: RouteContext) {
       );
     }
 
+    /*
+     * Reset password untuk SUPER_ADMIN hanya boleh
+     * dilakukan oleh SUPER_ADMIN platform.
+     */
+    if (
+      targetUser.role?.name === "SUPER_ADMIN" &&
+      actor.role !== "SUPER_ADMIN"
+    ) {
+      return NextResponse.json(
+        {
+          message:
+            "Hanya Super Admin yang dapat melakukan reset password akun SUPER_ADMIN.",
+        },
+        { status: 403 },
+      );
+    }
+
     const token = crypto.randomBytes(32).toString("hex");
+
     const expires = new Date(Date.now() + RESET_TOKEN_TTL_MS);
 
-    await prisma.passwordResetToken.deleteMany({
-      where: {
-        email: targetUser.email,
-      },
-    });
-
-    await prisma.passwordResetToken.create({
-      data: {
-        email: targetUser.email,
-        token,
-        expires,
-      },
-    });
-
-    await prisma.adminAction.create({
-      data: {
-        actorUserId: actor.id,
-        action: "PASSWORD_RESET_REQUESTED",
-        targetType: "User",
-        targetId: targetUser.id,
-        reason: "Permintaan reset password dibuat oleh Super Admin.",
-        metadata: {
-          targetEmail: targetUser.email,
-          expiresAt: expires.toISOString(),
+    await prisma.$transaction(async (tx) => {
+      /*
+       * Satu user/email hanya boleh memiliki
+       * satu active reset token.
+       */
+      await tx.passwordResetToken.deleteMany({
+        where: {
+          email: targetUser.email,
         },
-      },
+      });
+
+      await tx.passwordResetToken.create({
+        data: {
+          email: targetUser.email,
+          token,
+          expires,
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          actorUserId: actor.id,
+          action: "PASSWORD_RESET_REQUESTED",
+          module: "security",
+          entityType: "User",
+          entityId: targetUser.id,
+          metadata: {
+            targetEmail: targetUser.email,
+            targetName: targetUser.name,
+            targetRole: targetUser.role?.name ?? null,
+            expiresAt: expires.toISOString(),
+            initiatedBy: actor.email,
+          },
+        },
+      });
     });
 
     return NextResponse.json(

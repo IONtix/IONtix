@@ -1,307 +1,371 @@
 "use client";
 
-import React, { useState } from "react";
-import { useRouter } from "next/navigation";
 import {
-  Plus,
-  X,
-  User,
-  Mail,
-  Lock,
+  AlertCircle,
+  CheckCircle2,
   Eye,
   EyeOff,
-  Shield,
-  Phone,
-  CheckCircle2,
-  AlertCircle,
   Loader2,
+  Lock,
+  Mail,
+  Phone,
+  Plus,
+  Shield,
+  User,
+  X,
 } from "lucide-react";
+import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 
-export default function AddUserModal() {
+import type { SuperAdminRole } from "@/lib/platform-types";
+
+interface AddUserModalProps {
+  roles: SuperAdminRole[];
+  canCreateUser: boolean;
+  canAssignRole: boolean;
+}
+
+const CREATEABLE_STATUSES = [
+  {
+    value: "ACTIVE",
+    label: "Aktif",
+  },
+  {
+    value: "SUSPENDED",
+    label: "Suspend",
+  },
+  {
+    value: "PENDING",
+    label: "Pending",
+  },
+] as const;
+
+export default function AddUserModal({
+  roles,
+  canCreateUser,
+  canAssignRole,
+}: AddUserModalProps) {
   const router = useRouter();
+
+  const defaultRole = useMemo(() => {
+    return (
+      roles.find((role) => role.name === "PESERTA")?.name ??
+      roles[0]?.name ??
+      "PESERTA"
+    );
+  }, [roles]);
+
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  // Feedback states
-  const [errorMsg, setErrorMsg] = useState("");
-  const [successMsg, setSuccessMsg] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
 
   const [formData, setFormData] = useState({
     name: "",
     email: "",
     phone: "",
     password: "",
-    role: "USER",
-    status: "ACTIVE", // Tambahan fitur status
+    role: defaultRole,
+    status: "ACTIVE",
   });
 
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
-  ) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-    // Reset pesan error jika user mulai mengetik ulang
-    if (errorMsg) setErrorMsg("");
+  const resetForm = () => {
+    setFormData({
+      name: "",
+      email: "",
+      phone: "",
+      password: "",
+      role: defaultRole,
+      status: "ACTIVE",
+    });
+
+    setErrorMessage("");
+    setSuccessMessage("");
+    setShowPassword(false);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleClose = () => {
+    if (isLoading) {
+      return;
+    }
+
+    setIsOpen(false);
+    resetForm();
+  };
+
+  const updateField = (field: keyof typeof formData, value: string) => {
+    setFormData((current) => ({
+      ...current,
+      [field]: value,
+    }));
+
+    if (errorMessage) {
+      setErrorMessage("");
+    }
+  };
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!canCreateUser) {
+      return;
+    }
+
     setIsLoading(true);
-    setErrorMsg("");
-    setSuccessMsg("");
+    setErrorMessage("");
+    setSuccessMessage("");
 
     try {
-      // Memanggil API Endpoint untuk menyimpan user
-      const res = await fetch("/api/users", {
+      const payload = {
+        ...formData,
+        role: canAssignRole ? formData.role : defaultRole,
+      };
+
+      const response = await fetch("/api/users", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(payload),
       });
 
-      const data = await res.json();
+      const data = (await response.json()) as {
+        message?: string;
+      };
 
-      // Jika response dari API gagal (status bukan 200/201)
-      if (!res.ok) {
-        throw new Error(data.message || "Gagal menyimpan data ke server.");
+      if (!response.ok) {
+        throw new Error(data.message ?? "Gagal membuat pengguna.");
       }
 
-      // Jika berhasil
-      setSuccessMsg("Pengguna berhasil ditambahkan!");
+      setSuccessMessage("Pengguna berhasil ditambahkan.");
 
-      // Tunggu sebentar agar user melihat pesan sukses, lalu tutup
-      setTimeout(() => {
-        setFormData({
-          name: "",
-          email: "",
-          phone: "",
-          password: "",
-          role: "USER",
-          status: "ACTIVE",
-        });
+      window.setTimeout(() => {
         setIsOpen(false);
-        setSuccessMsg("");
-        // Refresh halaman agar data terbaru langsung muncul di tabel
+        resetForm();
         router.refresh();
-      }, 1500);
+      }, 700);
     } catch (error: unknown) {
-      console.error("Error adding user:", error);
-      setErrorMsg(
+      setErrorMessage(
         error instanceof Error
           ? error.message
-          : "Gagal menambahkan pengguna. Silakan coba lagi.",
+          : "Terjadi kesalahan saat membuat pengguna.",
       );
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Fungsi untuk reset state saat modal ditutup
-  const handleClose = () => {
-    if (isLoading) return; // Jangan tutup jika sedang memproses (loading)
-    setIsOpen(false);
-    setErrorMsg("");
-    setSuccessMsg("");
-    setFormData({
-      name: "",
-      email: "",
-      phone: "",
-      password: "",
-      role: "USER",
-      status: "ACTIVE",
-    });
-  };
+  if (!canCreateUser) {
+    return null;
+  }
 
   return (
     <>
-      {/* TRIGGER BUTTON */}
       <button
+        type="button"
         onClick={() => setIsOpen(true)}
-        className="group flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm shadow-blue-200 transition-all duration-200 hover:bg-blue-700 hover:shadow-md hover:-translate-y-0.5 active:translate-y-0"
+        className="group flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm shadow-blue-200 transition-all hover:-translate-y-0.5 hover:bg-blue-700 hover:shadow-md"
       >
-        <Plus className="h-4 w-4 transition-transform group-hover:rotate-90 duration-300" />
+        <Plus className="h-4 w-4 transition-transform group-hover:rotate-90" />
         Tambah User
       </button>
 
-      {/* MODAL OVERLAY */}
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-200">
-          {/* BACKDROP */}
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
           <div
-            className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity"
+            className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
             onClick={handleClose}
           />
 
-          {/* MODAL CONTENT */}
-          <div className="relative w-full max-w-2xl rounded-2xl bg-white shadow-2xl ring-1 ring-slate-900/5 overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200 ease-out">
-            {/* HEADER */}
-            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-5 bg-white">
+          <div className="relative flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-5">
               <div>
                 <h2 className="text-xl font-bold text-slate-800">
                   Tambah Pengguna Baru
                 </h2>
-                <p className="text-sm text-slate-500 mt-1">
-                  Lengkapi informasi di bawah untuk membuat akun baru.
+                <p className="mt-1 text-sm text-slate-500">
+                  Buat akun baru dan tentukan role sesuai hak akses.
                 </p>
               </div>
+
               <button
+                type="button"
                 onClick={handleClose}
                 disabled={isLoading}
-                className="rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors disabled:opacity-50"
+                className="rounded-full p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 disabled:opacity-50"
+                aria-label="Tutup"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            {/* BODY / FORM */}
             <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto">
-              <div className="px-6 py-6 space-y-8">
-                {/* Feedback Messages */}
-                {errorMsg && (
-                  <div className="flex items-center gap-2 rounded-lg bg-red-50 p-4 text-sm text-red-600 border border-red-100">
-                    <AlertCircle className="h-5 w-5 flex-shrink-0" />
-                    <p className="font-medium">{errorMsg}</p>
-                  </div>
-                )}
-                {successMsg && (
-                  <div className="flex items-center gap-2 rounded-lg bg-emerald-50 p-4 text-sm text-emerald-600 border border-emerald-100">
-                    <CheckCircle2 className="h-5 w-5 flex-shrink-0" />
-                    <p className="font-medium">{successMsg}</p>
+              <div className="space-y-7 px-6 py-6">
+                {errorMessage && (
+                  <div className="flex items-start gap-2 rounded-xl border border-red-100 bg-red-50 p-4 text-sm text-red-600">
+                    <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
+                    <p className="font-medium">{errorMessage}</p>
                   </div>
                 )}
 
-                {/* Grid Layout untuk membagi form menjadi 2 kolom */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* KOLOM KIRI: Informasi Dasar */}
+                {successMessage && (
+                  <div className="flex items-start gap-2 rounded-xl border border-emerald-100 bg-emerald-50 p-4 text-sm text-emerald-700">
+                    <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0" />
+                    <p className="font-medium">{successMessage}</p>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                   <div className="space-y-5">
-                    <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-4 border-b pb-2">
+                    <h3 className="border-b border-slate-100 pb-2 text-sm font-bold uppercase tracking-wider text-slate-900">
                       Informasi Dasar
                     </h3>
 
                     <div>
-                      <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                      <label className="mb-1.5 block text-sm font-semibold text-slate-700">
                         Nama Lengkap <span className="text-red-500">*</span>
                       </label>
+
                       <div className="relative">
-                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                          <User className="h-4 w-4 text-slate-400" />
-                        </div>
+                        <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+
                         <input
                           type="text"
-                          name="name"
                           required
                           value={formData.name}
-                          onChange={handleChange}
-                          className="block w-full pl-10 pr-3 py-2.5 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow bg-slate-50/50 hover:bg-white"
-                          placeholder="John Doe"
+                          onChange={(event) =>
+                            updateField("name", event.target.value)
+                          }
+                          className="w-full rounded-xl border border-slate-200 bg-slate-50/50 py-2.5 pl-10 pr-3 text-sm outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500/10"
+                          placeholder="Nama lengkap"
                         />
                       </div>
                     </div>
 
                     <div>
-                      <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                      <label className="mb-1.5 block text-sm font-semibold text-slate-700">
                         Alamat Email <span className="text-red-500">*</span>
                       </label>
+
                       <div className="relative">
-                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                          <Mail className="h-4 w-4 text-slate-400" />
-                        </div>
+                        <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+
                         <input
                           type="email"
-                          name="email"
                           required
                           value={formData.email}
-                          onChange={handleChange}
-                          className="block w-full pl-10 pr-3 py-2.5 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow bg-slate-50/50 hover:bg-white"
-                          placeholder="john@perusahaan.com"
+                          onChange={(event) =>
+                            updateField("email", event.target.value)
+                          }
+                          className="w-full rounded-xl border border-slate-200 bg-slate-50/50 py-2.5 pl-10 pr-3 text-sm outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500/10"
+                          placeholder="user@example.com"
                         />
                       </div>
                     </div>
 
                     <div>
-                      <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                      <label className="mb-1.5 block text-sm font-semibold text-slate-700">
                         Nomor Telepon
                       </label>
+
                       <div className="relative">
-                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                          <Phone className="h-4 w-4 text-slate-400" />
-                        </div>
+                        <Phone className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+
                         <input
                           type="tel"
-                          name="phone"
                           value={formData.phone}
-                          onChange={handleChange}
-                          className="block w-full pl-10 pr-3 py-2.5 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow bg-slate-50/50 hover:bg-white"
-                          placeholder="+62 812 3456 7890"
+                          onChange={(event) =>
+                            updateField("phone", event.target.value)
+                          }
+                          className="w-full rounded-xl border border-slate-200 bg-slate-50/50 py-2.5 pl-10 pr-3 text-sm outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500/10"
+                          placeholder="+62 812..."
                         />
                       </div>
                     </div>
                   </div>
 
-                  {/* KOLOM KANAN: Keamanan & Akses */}
                   <div className="space-y-5">
-                    <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-4 border-b pb-2">
+                    <h3 className="border-b border-slate-100 pb-2 text-sm font-bold uppercase tracking-wider text-slate-900">
                       Keamanan & Akses
                     </h3>
 
                     <div>
-                      <label className="block text-sm font-semibold text-slate-700 mb-1.5">
-                        Peran (Role) <span className="text-red-500">*</span>
+                      <label className="mb-1.5 block text-sm font-semibold text-slate-700">
+                        Role <span className="text-red-500">*</span>
                       </label>
+
                       <div className="relative">
-                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                          <Shield className="h-4 w-4 text-slate-400" />
-                        </div>
+                        <Shield className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+
                         <select
-                          name="role"
+                          disabled={!canAssignRole}
                           value={formData.role}
-                          onChange={handleChange}
-                          className="block w-full pl-10 pr-10 py-2.5 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow bg-slate-50/50 hover:bg-white appearance-none"
+                          onChange={(event) =>
+                            updateField("role", event.target.value)
+                          }
+                          className="w-full appearance-none rounded-xl border border-slate-200 bg-slate-50/50 py-2.5 pl-10 pr-4 text-sm outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500/10 disabled:cursor-not-allowed disabled:bg-slate-100"
                         >
-                          <option value="USER">User Reguler</option>
-                          <option value="EO">Mitra Event Organizer (EO)</option>
-                          <option value="SUPER_ADMIN">Super Admin</option>
+                          {roles.map((role) => (
+                            <option key={role.id} value={role.name}>
+                              {role.name}
+                              {role.isSystem ? " • System" : ""}
+                            </option>
+                          ))}
                         </select>
                       </div>
                     </div>
 
                     <div>
-                      <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                      <label className="mb-1.5 block text-sm font-semibold text-slate-700">
                         Status Akun
                       </label>
+
                       <select
-                        name="status"
                         value={formData.status}
-                        onChange={handleChange}
-                        className="block w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow bg-slate-50/50 hover:bg-white"
+                        onChange={(event) =>
+                          updateField("status", event.target.value)
+                        }
+                        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10"
                       >
-                        <option value="ACTIVE">Aktif (Dapat Login)</option>
-                        <option value="INACTIVE">Nonaktif / Suspend</option>
+                        {CREATEABLE_STATUSES.map((status) => (
+                          <option key={status.value} value={status.value}>
+                            {status.label}
+                          </option>
+                        ))}
                       </select>
                     </div>
 
                     <div>
-                      <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                      <label className="mb-1.5 block text-sm font-semibold text-slate-700">
                         Kata Sandi <span className="text-red-500">*</span>
                       </label>
+
                       <div className="relative">
-                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                          <Lock className="h-4 w-4 text-slate-400" />
-                        </div>
+                        <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+
                         <input
                           type={showPassword ? "text" : "password"}
-                          name="password"
                           required
+                          minLength={8}
                           value={formData.password}
-                          onChange={handleChange}
-                          className="block w-full pl-10 pr-10 py-2.5 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow bg-slate-50/50 hover:bg-white"
-                          placeholder="Minimal 6 karakter"
+                          onChange={(event) =>
+                            updateField("password", event.target.value)
+                          }
+                          className="w-full rounded-xl border border-slate-200 bg-slate-50/50 py-2.5 pl-10 pr-10 text-sm outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500/10"
+                          placeholder="Minimal 8 karakter"
                         />
+
                         <button
                           type="button"
-                          onClick={() => setShowPassword(!showPassword)}
-                          className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 transition-colors"
+                          onClick={() => setShowPassword((current) => !current)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition-colors hover:text-slate-600"
+                          aria-label={
+                            showPassword
+                              ? "Sembunyikan password"
+                              : "Tampilkan password"
+                          }
                         >
                           {showPassword ? (
                             <EyeOff className="h-4 w-4" />
@@ -315,20 +379,20 @@ export default function AddUserModal() {
                 </div>
               </div>
 
-              {/* FOOTER / ACTIONS */}
-              <div className="border-t border-slate-100 bg-slate-50/50 px-6 py-4 flex items-center justify-end gap-3">
+              <div className="flex justify-end gap-3 border-t border-slate-100 bg-slate-50/50 px-6 py-4">
                 <button
                   type="button"
                   onClick={handleClose}
                   disabled={isLoading}
-                  className="px-5 py-2.5 text-sm font-semibold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl transition-colors disabled:opacity-50"
+                  className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-50"
                 >
                   Batal
                 </button>
+
                 <button
                   type="submit"
                   disabled={isLoading}
-                  className="flex items-center gap-2 px-6 py-2.5 text-sm font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-sm shadow-blue-200 transition-all hover:-translate-y-0.5 disabled:opacity-70 disabled:hover:translate-y-0"
+                  className="flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-2.5 text-sm font-bold text-white shadow-sm transition-all hover:-translate-y-0.5 hover:bg-blue-700 disabled:opacity-70"
                 >
                   {isLoading ? (
                     <>
