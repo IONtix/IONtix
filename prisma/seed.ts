@@ -2,6 +2,7 @@ import { PrismaClient } from "../src/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import bcrypt from "bcryptjs";
+import { ROLE_NAMES, ROLE_POLICY } from "../src/lib/admin/role-policy";
 
 const connectionString = process.env.DIRECT_URL || process.env.DATABASE_URL;
 
@@ -163,71 +164,121 @@ async function seedPermissions() {
 async function seedRoles() {
   const seededPermissions = await seedPermissions();
 
-  const permissionIds = seededPermissions.map(({ id }) => ({ id }));
+  const permissionByName = new Map(
+    seededPermissions.map((permission) => [permission.name, permission]),
+  );
+
+  function resolvePolicyPermissionIds(
+    roleName: keyof typeof ROLE_POLICY,
+  ): { id: string }[] {
+    return ROLE_POLICY[roleName].map((permissionName) => {
+      const permission = permissionByName.get(permissionName);
+
+      if (!permission) {
+        throw new Error(
+          `Permission "${permissionName}" untuk role "${roleName}" tidak ditemukan di permission catalog.`,
+        );
+      }
+
+      return {
+        id: permission.id,
+      };
+    });
+  }
+
+  const superAdminPermissionIds = resolvePolicyPermissionIds(
+    ROLE_NAMES.SUPER_ADMIN,
+  );
+
+  const eoPermissionIds = resolvePolicyPermissionIds(ROLE_NAMES.EO);
+
+  const pesertaPermissionIds = resolvePolicyPermissionIds(ROLE_NAMES.PESERTA);
+
+  const supportAdminPermissionIds = resolvePolicyPermissionIds(
+    ROLE_NAMES.SUPPORT_ADMIN,
+  );
 
   const superAdminRole = await prisma.role.upsert({
     where: {
-      name: "SUPER_ADMIN",
+      name: ROLE_NAMES.SUPER_ADMIN,
     },
     update: {
       description: "Full platform administration",
       isSystem: true,
       permissions: {
-        set: permissionIds,
+        set: superAdminPermissionIds,
       },
     },
     create: {
-      name: "SUPER_ADMIN",
+      name: ROLE_NAMES.SUPER_ADMIN,
       description: "Full platform administration",
       isSystem: true,
       permissions: {
-        connect: permissionIds,
+        connect: superAdminPermissionIds,
       },
     },
   });
 
   const eoRole = await prisma.role.upsert({
     where: {
-      name: "EO",
+      name: ROLE_NAMES.EO,
     },
     update: {
       description: "Event organizer",
       isSystem: true,
+      permissions: {
+        set: eoPermissionIds,
+      },
     },
     create: {
-      name: "EO",
+      name: ROLE_NAMES.EO,
       description: "Event organizer",
       isSystem: true,
+      permissions: {
+        connect: eoPermissionIds,
+      },
     },
   });
 
   const pesertaRole = await prisma.role.upsert({
     where: {
-      name: "PESERTA",
+      name: ROLE_NAMES.PESERTA,
     },
     update: {
       description: "Participant / ticket buyer",
       isSystem: true,
+      permissions: {
+        set: pesertaPermissionIds,
+      },
     },
     create: {
-      name: "PESERTA",
+      name: ROLE_NAMES.PESERTA,
       description: "Participant / ticket buyer",
       isSystem: true,
+      permissions: {
+        connect: pesertaPermissionIds,
+      },
     },
   });
 
   await prisma.role.upsert({
     where: {
-      name: "SUPPORT_ADMIN",
+      name: ROLE_NAMES.SUPPORT_ADMIN,
     },
     update: {
       description: "Support and controlled administrative access",
       isSystem: false,
+      permissions: {
+        set: supportAdminPermissionIds,
+      },
     },
     create: {
-      name: "SUPPORT_ADMIN",
+      name: ROLE_NAMES.SUPPORT_ADMIN,
       description: "Support and controlled administrative access",
       isSystem: false,
+      permissions: {
+        connect: supportAdminPermissionIds,
+      },
     },
   });
 
