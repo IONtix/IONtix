@@ -64,7 +64,8 @@ export class IontixTestProvider implements PaymentProvider {
       provider: this.name,
       externalId,
       status: payment.status,
-      paidAt: payment.status === PaymentStatus.SUCCESS ? new Date() : null,
+      paidAt:
+        payment.status === PaymentStatus.SUCCESS ? payment.createdAt : null,
       expiresAt: payment.expiresAt,
     };
   }
@@ -77,12 +78,24 @@ export class IontixTestProvider implements PaymentProvider {
     const body = payload as Record<string, unknown>;
 
     const externalId =
-      typeof body.externalId === "string" ? body.externalId : "";
+      typeof body.externalId === "string" ? body.externalId.trim() : "";
 
     const statusValue = typeof body.status === "string" ? body.status : "";
 
+    const amount = typeof body.amount === "number" ? body.amount : null;
+
+    const currency = typeof body.currency === "string" ? body.currency : null;
+
     if (!externalId) {
       throw new Error("externalId wajib diisi.");
+    }
+
+    if (amount === null || !Number.isFinite(amount) || amount <= 0) {
+      throw new Error("Amount payment wajib diisi dan harus valid.");
+    }
+
+    if (!currency) {
+      throw new Error("Currency payment wajib diisi.");
     }
 
     const status = Object.values(PaymentStatus).includes(
@@ -91,16 +104,23 @@ export class IontixTestProvider implements PaymentProvider {
       ? (statusValue as PaymentStatus)
       : PaymentStatus.FAILED;
 
-    const payment = payments.get(externalId);
-
-    if (payment) {
-      payment.status = status;
-    }
-
+    /*
+     * PENTING:
+     * verifyNotification TIDAK mengubah status payment.
+     *
+     * Status database baru boleh berubah setelah
+     * confirmPayment() memvalidasi:
+     * - provider
+     * - amount
+     * - currency
+     * - payment yang sesuai
+     */
     return {
       provider: this.name,
       externalId,
       status,
+      amount,
+      currency,
       providerTransactionId:
         typeof body.providerTransactionId === "string"
           ? body.providerTransactionId
