@@ -1,6 +1,8 @@
 import Sidebar from "./_components/Sidebar";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import {
+  AuthorizationError,
+  requirePermission,
+} from "@/lib/auth/authorization";
 import { redirect } from "next/navigation";
 import { Bell, Search } from "lucide-react";
 
@@ -9,57 +11,84 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  // 1. OTORISASI KEAMANAN: Hanya cek sesi. Tidak perlu lagi mengecek URL halaman login.
-  const session = await getServerSession(authOptions);
+  let actor;
 
-  if (!session || session.user.role !== "SUPER_ADMIN") {
-    redirect("/super-admin/login");
+  try {
+    /*
+     * Seluruh area Super Admin Dashboard menggunakan
+     * platform.view sebagai gateway utama.
+     *
+     * Authorization tetap diverifikasi di server.
+     * Kita tidak lagi bergantung pada session.role
+     * yang dikirim ke client.
+     */
+    actor = await requirePermission("platform.view");
+  } catch (error: unknown) {
+    /*
+     * Hanya error authorization yang diarahkan kembali
+     * ke halaman login. Error server lainnya tetap
+     * dibiarkan naik agar tidak disamarkan sebagai
+     * masalah autentikasi.
+     */
+    if (
+      error instanceof AuthorizationError &&
+      (error.status === 401 || error.status === 403)
+    ) {
+      redirect("/super-admin/login");
+    }
+
+    throw error;
   }
 
-  // 2. RENDER TAMPILAN DASHBOARD UTAMA
   return (
-    <div className="flex h-screen bg-[#F8FAFC] font-sans overflow-hidden selection:bg-blue-600 selection:text-white">
-      {/* SIDEBAR ENTERPRISE KITA */}
+    <div className="flex h-screen overflow-hidden bg-[#F8FAFC] font-sans selection:bg-blue-600 selection:text-white">
       <Sidebar />
 
-      {/* AREA KONTEN UTAMA */}
-      <main className="flex-1 flex flex-col relative overflow-hidden">
-        {/* HEADER GLASSMORPHISM */}
-        <header className="sticky top-0 flex h-20 items-center justify-between bg-white/70 backdrop-blur-xl px-8 border-b border-slate-200/80 z-30 shadow-[0_1px_3px_0_rgba(0,0,0,0.02)]">
-          <div className="hidden md:flex items-center bg-slate-100/50 hover:bg-slate-100 border border-slate-200/80 rounded-lg px-4 py-2 w-[400px] focus-within:bg-white focus-within:border-blue-400 focus-within:ring-4 focus-within:ring-blue-500/10 transition-all duration-300">
-            <Search className="h-4 w-4 text-slate-400 mr-3" />
+      <main className="relative flex flex-1 flex-col overflow-hidden">
+        <header className="sticky top-0 z-30 flex h-20 items-center justify-between border-b border-slate-200/80 bg-white/70 px-8 shadow-[0_1px_3px_0_rgba(0,0,0,0.02)] backdrop-blur-xl">
+          <div className="hidden w-100 items-center rounded-lg border border-slate-200/80 bg-slate-100/50 px-4 py-2 transition-all duration-300 hover:bg-slate-100 focus-within:border-blue-400 focus-within:bg-white focus-within:ring-4 focus-within:ring-blue-500/10 md:flex">
+            <Search className="mr-3 h-4 w-4 text-slate-400" />
+
             <input
               type="text"
               placeholder="Pencarian cepat..."
-              className="bg-transparent border-none outline-none text-sm w-full text-slate-700 font-medium"
+              className="w-full border-none bg-transparent text-sm font-medium text-slate-700 outline-none"
+              aria-label="Pencarian cepat"
             />
-            <kbd className="hidden lg:inline-flex items-center gap-1 rounded bg-white px-2 py-1 text-[10px] font-bold text-slate-400 border border-slate-200 shadow-sm ml-2">
-              <span className="text-xs">⌘</span> K
+
+            <kbd className="ml-2 hidden items-center gap-1 rounded border border-slate-200 bg-white px-2 py-1 text-[10px] font-bold text-slate-400 shadow-sm lg:inline-flex">
+              <span className="text-xs">⌘</span>K
             </kbd>
           </div>
 
           <div className="ml-auto flex items-center gap-5">
-            <button className="relative p-2.5 text-slate-400 hover:bg-slate-100 rounded-full transition-all">
+            <button
+              type="button"
+              className="relative rounded-full p-2.5 text-slate-400 transition-all hover:bg-slate-100 hover:text-slate-600"
+              aria-label="Notifikasi"
+            >
               <Bell className="h-5 w-5" />
             </button>
-            <div className="flex items-center gap-3 pl-5 border-l border-slate-200/80">
-              <div className="text-right hidden sm:block">
-                <p className="font-semibold text-sm text-slate-900 leading-tight">
-                  {session.user?.name || "Admin"}
+
+            <div className="flex items-center gap-3 border-l border-slate-200/80 pl-5">
+              <div className="hidden text-right sm:block">
+                <p className="text-sm font-semibold leading-tight text-slate-900">
+                  {actor.name || "Admin"}
                 </p>
-                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                  {session.user.role || "SUPER_ADMIN"}
+
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                  {actor.role}
                 </p>
               </div>
-              <div className="h-9 w-9 rounded-full bg-slate-900 flex items-center justify-center text-white font-bold text-sm shadow-md">
-                {session.user?.name?.charAt(0).toUpperCase() || "A"}
+
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-900 text-sm font-bold text-white shadow-md">
+                {actor.name?.charAt(0).toUpperCase() || "A"}
               </div>
             </div>
           </div>
         </header>
 
-        {/* AREA INI AKAN DIISI OLEH page.tsx DARI MASING-MASING MENU */}
-        <div className="flex-1 overflow-y-auto bg-[#F8FAFC] p-8 relative scroll-smooth">
+        <div className="relative flex-1 overflow-y-auto scroll-smooth bg-[#F8FAFC] p-8">
           {children}
         </div>
       </main>
