@@ -8,31 +8,11 @@ import type {
   PaymentStatusResult,
 } from "../types";
 
-const payments = new Map<
-  string,
-  {
-    input: CreatePaymentInput;
-    status: PaymentStatus;
-    createdAt: Date;
-    expiresAt: Date | null;
-  }
->();
-
 export class IontixTestProvider implements PaymentProvider {
   readonly name = "IONTIX_TEST" as const;
 
   async createPayment(input: CreatePaymentInput): Promise<PaymentSession> {
-    const now = new Date();
-
-    const expiresAt =
-      input.expiresAt ?? new Date(now.getTime() + 30 * 60 * 1000);
-
-    payments.set(input.externalId, {
-      input,
-      status: PaymentStatus.PENDING,
-      createdAt: now,
-      expiresAt,
-    });
+    const expiresAt = input.expiresAt ?? new Date(Date.now() + 30 * 60 * 1000);
 
     return {
       provider: this.name,
@@ -50,23 +30,19 @@ export class IontixTestProvider implements PaymentProvider {
   }
 
   async getPaymentStatus(externalId: string): Promise<PaymentStatusResult> {
-    const payment = payments.get(externalId);
-
-    if (!payment) {
-      return {
-        provider: this.name,
-        externalId,
-        status: PaymentStatus.FAILED,
-      };
-    }
-
+    /*
+     * IONTIX_TEST tidak menyimpan state payment
+     * di memory. Source of truth ada di database.
+     *
+     * Status query aktual ditangani oleh layer
+     * payment persistence/confirmation.
+     */
     return {
       provider: this.name,
       externalId,
-      status: payment.status,
-      paidAt:
-        payment.status === PaymentStatus.SUCCESS ? payment.createdAt : null,
-      expiresAt: payment.expiresAt,
+      status: PaymentStatus.PENDING,
+      paidAt: null,
+      expiresAt: null,
     };
   }
 
@@ -105,15 +81,10 @@ export class IontixTestProvider implements PaymentProvider {
       : PaymentStatus.FAILED;
 
     /*
-     * PENTING:
-     * verifyNotification TIDAK mengubah status payment.
+     * Provider test TIDAK mengubah state.
      *
-     * Status database baru boleh berubah setelah
-     * confirmPayment() memvalidasi:
-     * - provider
-     * - amount
-     * - currency
-     * - payment yang sesuai
+     * confirmPayment() adalah satu-satunya layer
+     * yang mengubah state database setelah validasi.
      */
     return {
       provider: this.name,

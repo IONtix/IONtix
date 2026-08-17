@@ -1,12 +1,13 @@
 import crypto from "node:crypto";
+
 import prisma from "@/lib/prisma";
 import {
   ApprovalStatus,
+  OrderStatus,
   PaymentStatus,
   TicketStatus,
-  OrderStatus,
+  Prisma,
 } from "@/generated/prisma/client";
-import { Prisma } from "@/generated/prisma/client";
 
 export interface ConfirmPaymentInput {
   externalId: string;
@@ -85,226 +86,247 @@ export async function confirmPayment(
       ? PaymentStatus.SUCCESS
       : input.status;
 
-  return prisma.$transaction(async (tx) => {
-    const payment = await tx.payment.findUnique({
-      where: {
-        externalId: input.externalId.trim(),
-      },
-      include: {
-        order: {
-          include: {
-            ticketCategory: true,
-            tickets: true,
-          },
-        },
-        transactions: true,
-      },
-    });
-
-    if (!payment) {
-      throw new Error("Payment tidak ditemukan.");
-    }
-
-    if (payment.provider !== input.provider) {
-      throw new Error("Provider payment tidak sesuai.");
-    }
-
-    if (
-      input.amount !== null &&
-      input.amount !== undefined &&
-      payment.amount !== input.amount
-    ) {
-      throw new Error("Nominal payment tidak sesuai dengan order.");
-    }
-
-    if (input.currency && payment.currency !== input.currency) {
-      throw new Error("Currency payment tidak sesuai.");
-    }
-
-    /*
-     * Idempotency:
-     * jika payment sudah pernah menjadi final state yang sama,
-     * jangan menerbitkan ticket dua kali.
-     */
-    const alreadyFinal =
-      payment.status === PaymentStatus.SUCCESS &&
-      normalizedStatus === PaymentStatus.SUCCESS;
-
-    const order = payment.order;
-
-    if (!order) {
-      throw new Error("Order payment tidak ditemukan.");
-    }
-
-    const targetOrderStatus = mapOrderStatus(normalizedStatus);
-
-    const paidAt =
-      normalizedStatus === PaymentStatus.SUCCESS
-        ? (input.paidAt ?? new Date())
-        : null;
-
-    if (!alreadyFinal) {
-      const updateResult = await tx.payment.updateMany({
+  return prisma.$transaction(
+    async (tx) => {
+      const payment = await tx.payment.findUnique({
         where: {
-          id: payment.id,
-          /*
-           * Hanya status non-final yang boleh
-           * berpindah ke status baru melalui handler ini.
-           */
-          status: {
-            in: [
-              PaymentStatus.PENDING,
-              PaymentStatus.AUTHORIZED,
-              PaymentStatus.SETTLEMENT,
-            ],
+          externalId: input.externalId.trim(),
+        },
+        include: {
+          order: {
+            include: {
+              ticketCategory: true,
+              tickets: true,
+            },
           },
+          transactions: true,
+        },
+      });
+
+      if (!payment) {
+        throw new Error("Payment tidak ditemukan.");
+      }
+
+      if (payment.provider !== input.provider) {
+        throw new Error("Provider payment tidak sesuai.");
+      }
+
+      if (
+        input.amount !== null &&
+        input.amount !== undefined &&
+        payment.amount !== input.amount
+      ) {
+        throw new Error("Nominal payment tidak sesuai dengan order.");
+      }
+
+      if (input.currency && payment.currency !== input.currency) {
+        throw new Error("Currency payment tidak sesuai.");
+      }
+
+      const order = payment.order;
+
+      if (!order) {
+        throw new Error("Order payment tidak ditemukan.");
+      }
+
+      /*
+       * Idempotency:
+       * SUCCESS yang sudah final tidak boleh menerbitkan ticket kedua.
+       */
+      const alreadyFinal =
+        payment.status === PaymentStatus.SUCCESS &&
+        normalizedStatus === PaymentStatus.SUCCESS;
+
+      const targetOrderStatus = mapOrderStatus(normalizedStatus);
+
+      const paidAt =
+        normalizedStatus === PaymentStatus.SUCCESS
+          ? (input.paidAt ?? new Date())
+          : null;
+
+      if (!alreadyFinal) {
+        const updateResult = await tx.payment.updateMany({
+          where: {
+            id: payment.id,
+            status: {
+              in: [
+                PaymentStatus.PENDING,
+                PaymentStatus.AUTHORIZED,
+                PaymentStatus.SETTLEMENT,
+              ],
+            },
+          },
+          data: {
+            status: normalizedStatus,
+            providerTransactionId:
+              input.providerTransactionId ??
+              payment.providerTransactionId ??
+              null,
+            providerResponse: toJsonValue(input.providerResponse),
+            paidAt,
+            expiresAt: input.expiresAt ?? payment.expiresAt ?? null,
+          },
+        });
+
+        /*
+         * Jika tidak ada row yang berubah, cek apakah payment
+         * sudah diproses oleh request lain.
+         */
+        if (updateResult.count === 0) {
+          const latest = await tx.payment.findUnique({
+            where: {
+              id: payment.id,
+            },
+            select: {
+              status: true,
+            },
+          });
+
+          if (
+            latest?.status !== PaymentStatus.SUCCESS ||
+            normalizedStatus !== PaymentStatus.SUCCESS
+          ) {
+            throw new Error(
+              "Status payment berubah oleh proses lain. Silakan coba lagi.",
+            );
+          }
+        }
+      }
+
+      const finalPayment = alreadyFinal
+        ? payment
+        : await tx.payment.findUnique({
+            where: {
+              id: payment.id,
+            },
+          });
+
+      if (!finalPayment) {
+        throw new Error("Payment gagal dimuat kembali.");
+      }
+
+      /*
+       * Update order hanya setelah payment berhasil diproses.
+       */
+      await tx.order.update({
+        where: {
+          id: order.id,
         },
         data: {
-          status: normalizedStatus,
-          providerTransactionId:
-            input.providerTransactionId ??
-            payment.providerTransactionId ??
-            null,
-          providerResponse: toJsonValue(input.providerResponse),
-          paidAt,
-          expiresAt: input.expiresAt ?? payment.expiresAt ?? null,
+          status: targetOrderStatus,
+          paidAt:
+            normalizedStatus === PaymentStatus.SUCCESS ? paidAt : order.paidAt,
         },
       });
 
       /*
-       * updateMany(... conditional status ...)
-       * memberikan guard idempotency terhadap dua
-       * notification SUCCESS yang datang bersamaan.
+       * Selalu sinkronkan transaction yang terkait payment.
        */
-      if (updateResult.count === 0) {
-        const latest = await tx.payment.findUnique({
-          where: {
-            id: payment.id,
-          },
-          select: {
-            status: true,
-          },
-        });
-
-        if (
-          latest?.status !== PaymentStatus.SUCCESS ||
-          normalizedStatus !== PaymentStatus.SUCCESS
-        ) {
-          throw new Error(
-            "Status payment berubah oleh proses lain. Silakan coba lagi.",
-          );
-        }
-      }
-    }
-
-    const finalPayment = alreadyFinal
-      ? payment
-      : await tx.payment.findUnique({
-          where: {
-            id: payment.id,
-          },
-        });
-
-    if (!finalPayment) {
-      throw new Error("Payment gagal dimuat kembali.");
-    }
-
-    const latestOrderStatus = targetOrderStatus;
-
-    await tx.order.update({
-      where: {
-        id: order.id,
-      },
-      data: {
-        status: latestOrderStatus,
-        paidAt:
-          normalizedStatus === PaymentStatus.SUCCESS ? paidAt : order.paidAt,
-      },
-    });
-
-    await tx.transaction.updateMany({
-      where: {
-        paymentId: payment.id,
-      },
-      data: {
-        status: normalizedStatus,
-        externalId: input.externalId,
-        paymentMethod: payment.method ? String(payment.method) : null,
-        metadata:
-          input.providerResponse === undefined
-            ? undefined
-            : toJsonValue(input.providerResponse),
-      },
-    });
-
-    let ticketIds: string[] = [];
-
-    /*
-     * Ticket hanya diterbitkan ketika payment benar-benar SUCCESS.
-     * Untuk kategori dengan approval workflow, payment success
-     * belum otomatis berarti ticket dapat diterbitkan.
-     */
-    if (
-      normalizedStatus === PaymentStatus.SUCCESS &&
-      (order.approvalStatus === ApprovalStatus.NONE ||
-        order.approvalStatus === ApprovalStatus.APPROVED)
-    ) {
-      const existingTickets = await tx.ticket.findMany({
+      await tx.transaction.updateMany({
         where: {
-          orderId: order.id,
+          paymentId: payment.id,
         },
-        select: {
-          id: true,
+        data: {
+          status: normalizedStatus,
+          externalId: input.externalId.trim(),
+          paymentMethod: payment.method ? String(payment.method) : null,
+          metadata:
+            input.providerResponse === undefined
+              ? undefined
+              : toJsonValue(input.providerResponse),
         },
       });
 
-      if (existingTickets.length > 0) {
-        ticketIds = existingTickets.map((ticket) => ticket.id);
-      } else {
-        if (!order.ticketCategory) {
-          throw new Error("Kategori tiket order tidak ditemukan.");
-        }
+      let ticketIds: string[] = [];
 
-        const ticket = await tx.ticket.create({
-          data: {
-            qrCode: createQrCode(),
+      /*
+       * Ticket hanya diterbitkan ketika payment SUCCESS.
+       * Approval workflow tetap dihormati.
+       */
+      if (
+        normalizedStatus === PaymentStatus.SUCCESS &&
+        (order.approvalStatus === ApprovalStatus.NONE ||
+          order.approvalStatus === ApprovalStatus.APPROVED)
+      ) {
+        const existingTickets = await tx.ticket.findMany({
+          where: {
             orderId: order.id,
-            transactionId: payment.transactions[0]?.id ?? null,
-            eventId: order.eventId,
-            categoryId: order.ticketCategory.id,
-            userId: payment.userId ?? order.buyerUserId ?? null,
-            participantId: order.participantId ?? null,
-            status: TicketStatus.ACTIVE,
-            isScanned: false,
-            issuedAt: paidAt ?? new Date(),
-            metadata: {
-              paymentExternalId: payment.externalId,
-              provider: payment.provider,
-            },
           },
           select: {
             id: true,
           },
         });
 
-        ticketIds = [ticket.id];
-      }
-    }
+        if (existingTickets.length > 0) {
+          ticketIds = existingTickets.map((ticket) => ticket.id);
+        } else {
+          if (!order.ticketCategory) {
+            throw new Error("Kategori tiket order tidak ditemukan.");
+          }
 
-    return {
-      success: true,
-      paymentId: payment.id,
-      orderId: order.id,
-      paymentStatus:
-        finalPayment.status === PaymentStatus.SUCCESS &&
-        normalizedStatus === PaymentStatus.SUCCESS
-          ? PaymentStatus.SUCCESS
-          : normalizedStatus,
-      orderStatus: latestOrderStatus,
-      ticketIds,
-      alreadyProcessed:
-        alreadyFinal ||
-        (ticketIds.length > 0 && finalPayment.status === PaymentStatus.SUCCESS),
-    };
-  });
+          const transactionId =
+            payment.transactions[0]?.id ??
+            (
+              await tx.transaction.findFirst({
+                where: {
+                  paymentId: payment.id,
+                },
+                select: {
+                  id: true,
+                },
+                orderBy: {
+                  createdAt: "asc",
+                },
+              })
+            )?.id ??
+            null;
+
+          const ticket = await tx.ticket.create({
+            data: {
+              qrCode: createQrCode(),
+              orderId: order.id,
+              transactionId,
+              eventId: order.eventId,
+              categoryId: order.ticketCategory.id,
+              userId: payment.userId ?? order.buyerUserId ?? null,
+              participantId: order.participantId ?? null,
+              status: TicketStatus.ACTIVE,
+              isScanned: false,
+              issuedAt: paidAt ?? new Date(),
+              metadata: {
+                paymentExternalId: payment.externalId,
+                provider: payment.provider,
+              },
+            },
+            select: {
+              id: true,
+            },
+          });
+
+          ticketIds = [ticket.id];
+        }
+      }
+
+      return {
+        success: true,
+        paymentId: payment.id,
+        orderId: order.id,
+        paymentStatus:
+          finalPayment.status === PaymentStatus.SUCCESS &&
+          normalizedStatus === PaymentStatus.SUCCESS
+            ? PaymentStatus.SUCCESS
+            : normalizedStatus,
+        orderStatus: targetOrderStatus,
+        ticketIds,
+        alreadyProcessed:
+          alreadyFinal ||
+          (ticketIds.length > 0 &&
+            finalPayment.status === PaymentStatus.SUCCESS),
+      };
+    },
+    {
+      maxWait: 10_000,
+      timeout: 30_000,
+    },
+  );
 }

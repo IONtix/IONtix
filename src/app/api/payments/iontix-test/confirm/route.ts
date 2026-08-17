@@ -12,9 +12,7 @@ import { confirmPayment } from "@/lib/payment/confirmation";
 export async function POST(request: Request) {
   try {
     /*
-     * IONTIX_TEST hanya untuk development/sandbox.
-     * Jangan expose endpoint ini sebagai payment endpoint
-     * produksi.
+     * Endpoint ini khusus development/sandbox.
      */
     if (process.env.NODE_ENV === "production") {
       return NextResponse.json(
@@ -29,18 +27,28 @@ export async function POST(request: Request) {
     registerPaymentProviders();
 
     const body = (await request.json()) as {
+      provider?: unknown;
       externalId?: unknown;
       status?: unknown;
       providerTransactionId?: unknown;
       amount?: unknown;
       currency?: unknown;
       providerResponse?: unknown;
+      expiresAt?: unknown;
     };
+
+    const provider =
+      typeof body.provider === "string" ? body.provider.trim() : "IONTIX_TEST";
 
     const externalId =
       typeof body.externalId === "string" ? body.externalId.trim() : "";
 
     const requestedStatus = typeof body.status === "string" ? body.status : "";
+
+    const amount = typeof body.amount === "number" ? body.amount : undefined;
+
+    const currency =
+      typeof body.currency === "string" ? body.currency : undefined;
 
     if (!externalId) {
       return NextResponse.json(
@@ -51,10 +59,48 @@ export async function POST(request: Request) {
       );
     }
 
-    if (requestedStatus !== PaymentStatus.SUCCESS) {
+    /*
+     * Untuk test provider mismatch, provider harus
+     * benar-benar dikirim oleh request.
+     */
+    if (provider !== "IONTIX_TEST") {
       return NextResponse.json(
         {
-          error: "Endpoint test confirmation hanya menerima status SUCCESS.",
+          error: `Provider "${provider}" tidak didukung oleh endpoint IONTIX_TEST.`,
+        },
+        { status: 400 },
+      );
+    }
+
+    const supportedStatuses = Object.values(PaymentStatus);
+
+    if (!supportedStatuses.includes(requestedStatus as PaymentStatus)) {
+      return NextResponse.json(
+        {
+          error: "Status payment tidak valid.",
+        },
+        { status: 400 },
+      );
+    }
+
+    const requestedPaymentStatus = requestedStatus as PaymentStatus;
+
+    if (
+      requestedPaymentStatus === PaymentStatus.SUCCESS &&
+      (amount === undefined || !Number.isFinite(amount) || amount <= 0)
+    ) {
+      return NextResponse.json(
+        {
+          error: "Amount wajib diisi untuk status SUCCESS.",
+        },
+        { status: 400 },
+      );
+    }
+
+    if (requestedPaymentStatus === PaymentStatus.SUCCESS && !currency) {
+      return NextResponse.json(
+        {
+          error: "Currency wajib diisi untuk status SUCCESS.",
         },
         { status: 400 },
       );
@@ -64,13 +110,13 @@ export async function POST(request: Request) {
       "IONTIX_TEST",
       {
         externalId,
-        status: PaymentStatus.SUCCESS,
+        status: requestedPaymentStatus,
         providerTransactionId:
           typeof body.providerTransactionId === "string"
             ? body.providerTransactionId
             : `TEST-TX-${crypto.randomUUID()}`,
-        amount: typeof body.amount === "number" ? body.amount : undefined,
-        currency: typeof body.currency === "string" ? body.currency : undefined,
+        amount,
+        currency,
         providerResponse: body.providerResponse ?? {
           mode: "development",
         },
@@ -85,7 +131,10 @@ export async function POST(request: Request) {
       amount: notification.amount,
       currency: notification.currency,
       providerResponse: notification.rawPayload,
-      paidAt: new Date(),
+      paidAt:
+        requestedPaymentStatus === PaymentStatus.SUCCESS ? new Date() : null,
+      expiresAt:
+        typeof body.expiresAt === "string" ? new Date(body.expiresAt) : null,
     });
 
     return NextResponse.json(
@@ -93,7 +142,7 @@ export async function POST(request: Request) {
         success: true,
         message: result.alreadyProcessed
           ? "Payment sudah diproses sebelumnya."
-          : "Payment berhasil dikonfirmasi.",
+          : "Payment berhasil diproses.",
         data: result,
       },
       { status: 200 },
@@ -116,7 +165,7 @@ export async function POST(request: Request) {
         error:
           error instanceof Error
             ? error.message
-            : "Gagal mengonfirmasi pembayaran.",
+            : "Gagal memproses pembayaran.",
       },
       { status: 500 },
     );
