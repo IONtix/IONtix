@@ -9,6 +9,7 @@ import {
 import { listPermissions, listRoles } from "@/lib/admin/roles";
 
 import PermissionMatrix from "./_components/PermissionMatrix";
+import RoleEditor from "./_components/RoleEditor";
 
 function formatDate(value: Date) {
   return value.toLocaleDateString("id-ID", {
@@ -88,20 +89,26 @@ export default async function RolesManagementPage() {
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 ease-out">
       {/* HEADER */}
-      <div>
-        <div className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-blue-600">
-          <ShieldCheck className="h-4 w-4" />
-          Access Control
+      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        <div>
+          <div className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-blue-600">
+            <ShieldCheck className="h-4 w-4" />
+            Access Control
+          </div>
+
+          <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">
+            Roles & Permissions
+          </h1>
+
+          <p className="mt-1 max-w-3xl text-sm font-medium text-slate-500">
+            Kelola role platform dan katalog permission untuk mengatur hak akses
+            pengguna serta anggota organisasi secara terstruktur.
+          </p>
         </div>
 
-        <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">
-          Roles & Permissions
-        </h1>
-
-        <p className="mt-1 max-w-3xl text-sm font-medium text-slate-500">
-          Kelola role platform dan katalog permission untuk mengatur hak akses
-          pengguna serta anggota organisasi secara terstruktur.
-        </p>
+        <div className="shrink-0">
+          <RoleEditor />
+        </div>
       </div>
 
       {/* SUMMARY */}
@@ -186,7 +193,7 @@ export default async function RolesManagementPage() {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-230 text-left text-sm text-slate-600">
+          <table className="w-full min-w-[920px] text-left text-sm text-slate-600">
             <thead className="border-b border-slate-200 bg-white text-xs uppercase text-slate-500">
               <tr>
                 <th className="px-6 py-4 font-semibold tracking-wider">Role</th>
