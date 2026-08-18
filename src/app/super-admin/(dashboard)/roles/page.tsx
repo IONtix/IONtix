@@ -10,6 +10,7 @@ import { listPermissions, listRoles } from "@/lib/admin/roles";
 
 import PermissionMatrix from "./_components/PermissionMatrix";
 import RoleCloneDialog from "./_components/RoleCloneDialog";
+import RoleDeleteDialog from "./_components/RoleDeleteDialog";
 import RoleEditor from "./_components/RoleEditor";
 
 function formatDate(value: Date) {
@@ -306,6 +307,18 @@ export default async function RolesManagementPage() {
                               name: role.name,
                               description: role.description,
                               isSystem: role.isSystem,
+                            }}
+                          />
+
+                          <RoleDeleteDialog
+                            role={{
+                              id: role.id,
+                              name: role.name,
+                              description: role.description,
+                              isSystem: role.isSystem,
+                              userCount: role.userCount,
+                              organizationMemberCount:
+                                role.organizationMemberCount,
                             }}
                           />
                         </div>
