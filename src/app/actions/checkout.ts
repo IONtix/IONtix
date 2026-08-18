@@ -251,6 +251,25 @@ export async function processCheckout(
           );
         }
 
+        /*
+         * Inventory protection:
+         * Lock seluruh kategori yang terlibat dalam urutan ID yang
+         * deterministik agar dua checkout paralel untuk kategori yang
+         * sama tidak dapat lolos pemeriksaan quota secara bersamaan.
+         */
+        const categoryIdsToLock = Array.from(requestedByCategory.keys()).sort();
+
+        for (const categoryId of categoryIdsToLock) {
+          await tx.$queryRaw(
+            Prisma.sql`
+              SELECT "id"
+              FROM "TicketCategory"
+              WHERE "id" = ${categoryId}
+              FOR UPDATE
+            `,
+          );
+        }
+
         for (const [categoryId, requestedCount] of requestedByCategory) {
           const category = categoryMap.get(categoryId);
 
@@ -262,10 +281,10 @@ export async function processCheckout(
             where: {
               ticketCategoryId: categoryId,
               status: {
-                notIn: [
-                  OrderStatus.EXPIRED,
-                  OrderStatus.CANCELLED,
-                  OrderStatus.FAILED,
+                in: [
+                  OrderStatus.PENDING_PAYMENT,
+                  OrderStatus.PAYMENT_PROCESSING,
+                  OrderStatus.PAID,
                 ],
               },
             },
@@ -278,19 +297,58 @@ export async function processCheckout(
           }
         }
 
-        const normalizedAddons = payload.addons
-          .map((addon) => ({
-            addonId: normalizeRequiredString(addon.addonId, "Add-on"),
-            quantity: normalizeNonNegativeInteger(
-              addon.quantity,
-              "Jumlah add-on",
-            ),
-          }))
-          .filter((addon) => addon.quantity > 0);
+        /*
+         * Normalisasi add-on di server:
+         * client dapat mengirim ID add-on yang sama lebih dari sekali.
+         * Kita gabungkan quantity sebelum validasi dan penyimpanan.
+         */
+        const addonQuantityMap = new Map<string, number>();
 
-        const addonIds = Array.from(
-          new Set(normalizedAddons.map((addon) => addon.addonId)),
-        );
+        for (const addon of payload.addons) {
+          const addonId = normalizeRequiredString(
+            addon.addonId,
+            "Add-on",
+          );
+          const quantity = normalizeNonNegativeInteger(
+            addon.quantity,
+            "Jumlah add-on",
+          );
+
+          if (quantity <= 0) {
+            continue;
+          }
+
+          addonQuantityMap.set(
+            addonId,
+            (addonQuantityMap.get(addonId) ?? 0) + quantity,
+          );
+        }
+
+        const normalizedAddons = Array.from(
+          addonQuantityMap.entries(),
+        ).map(([addonId, quantity]) => ({
+          addonId,
+          quantity,
+        }));
+
+        const addonIds = normalizedAddons
+          .map((addon) => addon.addonId)
+          .sort();
+
+        /*
+         * Lock add-on rows dalam urutan deterministic untuk mencegah
+         * race condition ketika dua checkout memakai add-on yang sama.
+         */
+        for (const addonId of addonIds) {
+          await tx.$queryRaw(
+            Prisma.sql`
+              SELECT "id"
+              FROM "Addon"
+              WHERE "id" = ${addonId}
+              FOR UPDATE
+            `,
+          );
+        }
 
         const addons =
           addonIds.length > 0
@@ -331,6 +389,15 @@ export async function processCheckout(
             const claimed = await tx.addonOrder.aggregate({
               where: {
                 addonId: addon.addonId,
+                order: {
+                  status: {
+                    in: [
+                      OrderStatus.PENDING_PAYMENT,
+                      OrderStatus.PAYMENT_PROCESSING,
+                      OrderStatus.PAID,
+                    ],
+                  },
+                },
               },
               _sum: {
                 quantity: true,
