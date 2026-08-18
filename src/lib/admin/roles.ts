@@ -320,19 +320,23 @@ export async function updateRole(roleId: string, input: UpdateRoleInput) {
   }
 
   /*
-   * System role tidak dapat diganti namanya.
-   * Description dan permission masih dapat
-   * dikelola melalui role manager.
+   * System role sepenuhnya read-only melalui
+   * Role Manager. Perubahan nama, deskripsi,
+   * maupun assignment permission tidak diizinkan.
+   *
+   * Source of truth system role tetap berasal
+   * dari policy + seed platform.
    */
-  if (existingRole.isSystem && input.name !== undefined) {
-    const normalizedName = normalizeRoleName(input.name);
-
-    if (normalizedName !== existingRole.name) {
-      throw new AuthorizationError(
-        `Role system "${existingRole.name}" tidak dapat diganti namanya.`,
-        403,
-      );
-    }
+  if (
+    existingRole.isSystem &&
+    (input.name !== undefined ||
+      input.description !== undefined ||
+      input.permissionIds !== undefined)
+  ) {
+    throw new AuthorizationError(
+      `System role "${existingRole.name}" tidak dapat diubah melalui Role Manager.`,
+      403,
+    );
   }
 
   const newName =

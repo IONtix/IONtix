@@ -193,7 +193,7 @@ export default async function RolesManagementPage() {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[920px] text-left text-sm text-slate-600">
+          <table className="w-full min-w-230 text-left text-sm text-slate-600">
             <thead className="border-b border-slate-200 bg-white text-xs uppercase text-slate-500">
               <tr>
                 <th className="px-6 py-4 font-semibold tracking-wider">Role</th>
@@ -215,13 +215,17 @@ export default async function RolesManagementPage() {
                 <th className="px-6 py-4 font-semibold tracking-wider">
                   Diperbarui
                 </th>
+
+                <th className="px-6 py-4 text-right font-semibold tracking-wider">
+                  Aksi
+                </th>
               </tr>
             </thead>
 
             <tbody className="divide-y divide-slate-100">
               {roles.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center">
+                  <td colSpan={7} className="px-6 py-12 text-center">
                     <div className="mx-auto max-w-sm">
                       <p className="font-semibold text-slate-800">
                         Belum ada role
@@ -281,6 +285,23 @@ export default async function RolesManagementPage() {
 
                     <td className="px-6 py-4 text-slate-500">
                       {formatDate(role.updatedAt)}
+                    </td>
+
+                    <td className="px-6 py-4 text-right">
+                      {!role.isSystem ? (
+                        <RoleEditor
+                          role={{
+                            id: role.id,
+                            name: role.name,
+                            description: role.description,
+                            isSystem: role.isSystem,
+                          }}
+                        />
+                      ) : (
+                        <span className="text-xs font-medium text-slate-400">
+                          Read Only
+                        </span>
+                      )}
                     </td>
                   </tr>
                 ))
