@@ -36,7 +36,7 @@ export default async function SuperAdminDashboard() {
       include: { runner: true }, // Pastikan model 'runner' atau 'user' sesuai dengan skema Prisma Anda
     }),
     prisma.event.findMany({
-      where: { isPublished: false },
+      where: { status: "PENDING_REVIEW" },
       take: 3,
       orderBy: { createdAt: "desc" },
       include: { eo: true },
