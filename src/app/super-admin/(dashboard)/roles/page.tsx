@@ -9,6 +9,7 @@ import {
 import { listPermissions, listRoles } from "@/lib/admin/roles";
 
 import PermissionMatrix from "./_components/PermissionMatrix";
+import RoleCloneDialog from "./_components/RoleCloneDialog";
 import RoleEditor from "./_components/RoleEditor";
 
 function formatDate(value: Date) {
@@ -289,14 +290,25 @@ export default async function RolesManagementPage() {
 
                     <td className="px-6 py-4 text-right">
                       {!role.isSystem ? (
-                        <RoleEditor
-                          role={{
-                            id: role.id,
-                            name: role.name,
-                            description: role.description,
-                            isSystem: role.isSystem,
-                          }}
-                        />
+                        <div className="flex justify-end gap-2">
+                          <RoleEditor
+                            role={{
+                              id: role.id,
+                              name: role.name,
+                              description: role.description,
+                              isSystem: role.isSystem,
+                            }}
+                          />
+
+                          <RoleCloneDialog
+                            role={{
+                              id: role.id,
+                              name: role.name,
+                              description: role.description,
+                              isSystem: role.isSystem,
+                            }}
+                          />
+                        </div>
                       ) : (
                         <span className="text-xs font-medium text-slate-400">
                           Read Only
