@@ -643,6 +643,13 @@ export async function updateRolePermissions(
     throw new AuthorizationError("Role tidak ditemukan.", 404);
   }
 
+  if (existingRole.isSystem) {
+    throw new AuthorizationError(
+      `Permission untuk system role "${existingRole.name}" tidak dapat diubah melalui Role Manager.`,
+      403,
+    );
+  }
+
   const previousPermissionIds = existingRole.permissions.map(
     (permission) => permission.id,
   );

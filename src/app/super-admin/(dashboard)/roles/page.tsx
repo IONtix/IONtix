@@ -5,7 +5,10 @@ import {
   AuthorizationError,
   requirePermission,
 } from "@/lib/auth/authorization";
+
 import { listPermissions, listRoles } from "@/lib/admin/roles";
+
+import PermissionMatrix from "./_components/PermissionMatrix";
 
 function formatDate(value: Date) {
   return value.toLocaleDateString("id-ID", {
@@ -43,7 +46,6 @@ function groupPermissions(
     const current = grouped.get(moduleName) ?? [];
 
     current.push(permission);
-
     grouped.set(moduleName, current);
   }
 
@@ -280,6 +282,9 @@ export default async function RolesManagementPage() {
           </table>
         </div>
       </section>
+
+      {/* PERMISSION MATRIX */}
+      <PermissionMatrix roles={roles} permissions={permissions} />
 
       {/* PERMISSION CATALOG */}
       <section className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
