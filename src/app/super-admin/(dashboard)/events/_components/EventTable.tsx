@@ -6,9 +6,9 @@ import {
   MoreHorizontal,
   Calendar,
   MapPin,
-  Clock,
   Globe,
 } from "lucide-react";
+import { getEventStatusMeta } from "@/lib/events/status";
 
 // Struktur data yang aman (menyesuaikan kemungkinan nama kolom di database Anda)
 interface EventData {
@@ -18,6 +18,7 @@ interface EventData {
   location?: string;
   date?: Date;
   startDate?: Date; // Berjaga-jaga jika menggunakan 'startDate'
+  status?: string;
   isPublished: boolean;
   createdAt: Date;
   eo?: {
@@ -121,17 +122,31 @@ export default function EventTable({ initialData }: { initialData: EventData[] }
                   </td>
 
                   <td className="px-6 py-4">
-                    {event.isPublished ? (
-                      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-600 border border-emerald-200 shadow-sm">
-                        <Globe className="h-3.5 w-3.5" />
-                        Live / Publik
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-600 border border-amber-200 shadow-sm">
-                        <Clock className="h-3.5 w-3.5" />
-                        Draft / Menunggu
-                      </span>
-                    )}
+                    {(() => {
+                      const meta = getEventStatusMeta(event.status);
+
+                      const toneClass = {
+                        neutral:
+                          "bg-slate-50 text-slate-600 border-slate-200",
+                        warning:
+                          "bg-amber-50 text-amber-700 border-amber-200",
+                        success:
+                          "bg-emerald-50 text-emerald-700 border-emerald-200",
+                        danger:
+                          "bg-red-50 text-red-700 border-red-200",
+                        info:
+                          "bg-blue-50 text-blue-700 border-blue-200",
+                      }[meta.tone];
+
+                      return (
+                        <span
+                          title={meta.description}
+                          className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold shadow-sm ${toneClass}`}
+                        >
+                          {meta.label}
+                        </span>
+                      );
+                    })()}
                   </td>
 
                   <td className="px-6 py-4 text-right">

@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import type { DashboardEvent } from "@/lib/platform-types";
+import { getEventStatusMeta } from "@/lib/events/status";
 import Link from "next/link";
 import {
   Plus,
@@ -82,19 +83,7 @@ export default function EventManagementPage() {
   };
 
   const getEventStatus = (event: DashboardEvent) => {
-    if (event.isPublished === false) {
-      return "draft";
-    }
-
-    const eventDateObj = event.date ? new Date(event.date) : null;
-
-    const now = new Date();
-
-    if (eventDateObj && eventDateObj < now) {
-      return "selesai";
-    }
-
-    return "publish";
+    return event.status || "DRAFT";
   };
 
   const filteredEvents = events.filter((event) => {
@@ -142,28 +131,36 @@ export default function EventManagementPage() {
   };
 
   const getStatusBadge = (status: string) => {
-    if (status === "publish") {
-      return (
-        <span className="z-20 relative flex items-center gap-1.5 rounded-full border border-[#10B981]/20 bg-[#10B981]/10 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-[#10B981]">
-          <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#10B981]" />{" "}
-          Berjalan
-        </span>
-      );
-    }
+    const meta = getEventStatusMeta(status);
 
-    if (status === "selesai") {
-      return (
-        <span className="z-20 relative flex items-center gap-1.5 rounded-full border border-red-500/20 bg-red-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-red-500">
-          <div className="h-1.5 w-1.5 rounded-full bg-red-500" />
-          Selesai
-        </span>
-      );
-    }
+    const toneClass = {
+      neutral:
+        "border-slate-500/20 bg-slate-500/10 text-slate-400",
+      warning:
+        "border-amber-500/20 bg-amber-500/10 text-amber-400",
+      success:
+        "border-emerald-500/20 bg-emerald-500/10 text-emerald-400",
+      danger:
+        "border-red-500/20 bg-red-500/10 text-red-400",
+      info:
+        "border-blue-500/20 bg-blue-500/10 text-blue-400",
+    }[meta.tone];
+
+    const dotClass = {
+      neutral: "bg-slate-400",
+      warning: "bg-amber-400",
+      success: "bg-emerald-400",
+      danger: "bg-red-400",
+      info: "bg-blue-400",
+    }[meta.tone];
 
     return (
-      <span className="z-20 relative flex items-center gap-1.5 rounded-full border border-slate-500/20 bg-slate-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-slate-400">
-        <div className="h-1.5 w-1.5 rounded-full bg-slate-400" />
-        Draft
+      <span
+        title={meta.description}
+        className={`z-20 relative flex items-center gap-1.5 rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-widest ${toneClass}`}
+      >
+        <div className={`h-1.5 w-1.5 rounded-full ${dotClass}`} />
+        {meta.label}
       </span>
     );
   };
@@ -200,15 +197,19 @@ export default function EventManagementPage() {
               label: "Semua Event",
             },
             {
-              id: "publish",
-              label: "Berjalan",
-            },
-            {
-              id: "draft",
+              id: "DRAFT",
               label: "Draft",
             },
             {
-              id: "selesai",
+              id: "PENDING_REVIEW",
+              label: "Menunggu Review",
+            },
+            {
+              id: "PUBLISHED",
+              label: "Dipublikasikan",
+            },
+            {
+              id: "COMPLETED",
               label: "Selesai",
             },
           ].map((tab) => (
@@ -288,7 +289,7 @@ export default function EventManagementPage() {
 
               const status = getEventStatus(event);
 
-              const isSelesai = status === "selesai";
+              const isSelesai = status === "COMPLETED";
 
               const displayLocation =
                 event.location ||

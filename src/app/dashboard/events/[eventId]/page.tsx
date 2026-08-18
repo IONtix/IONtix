@@ -2,6 +2,7 @@ import Link from "next/link";
 import Image from "next/image";
 import prisma from "@/lib/prisma";
 import { notFound } from "next/navigation";
+import { getEventStatusMeta } from "@/lib/events/status";
 import {
   ChevronLeft,
   Edit3,
@@ -19,13 +20,13 @@ import {
 export default async function EventDetailPage({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: Promise<{ eventId: string }>;
 }) {
-  const { id } = await params;
+  const { eventId } = await params;
 
   // Ambil detail event beserta relasinya
   const event = await prisma.event.findUnique({
-    where: { id },
+    where: { id: eventId },
     include: {
       categories: true,
       eo: true,
@@ -51,6 +52,7 @@ export default async function EventDetailPage({
 
   const imageUrl = event.imageUrl || null;
   const logoUrl = event.logoUrl || null;
+  const statusMeta = getEventStatusMeta(event.status);
 
   // Parse Custom Fields dari JSON
   const customFields = Array.isArray(event.customFields)
@@ -105,8 +107,11 @@ export default async function EventDetailPage({
               </div>
             )}
             <div className="absolute top-4 left-4 z-10">
-              <span className="px-3 py-1 bg-[#10B981]/20 text-[#10B981] border border-[#10B981]/30 rounded-full text-[10px] font-black uppercase tracking-widest backdrop-blur-md">
-                {event.isPublished ? "BERJALAN" : "DRAFT"}
+              <span
+                title={statusMeta.description}
+                className="px-3 py-1 bg-black/60 border border-white/10 text-white rounded-full text-[10px] font-black uppercase tracking-widest backdrop-blur-md"
+              >
+                {statusMeta.label}
               </span>
             </div>
             <div className="absolute top-4 right-4 z-10">

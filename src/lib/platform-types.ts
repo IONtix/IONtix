@@ -194,6 +194,7 @@ export interface DashboardEvent {
   id: string;
   title: string;
 
+  status?: string;
   category?: string | null;
 
   locationName?: string | null;
@@ -211,7 +212,6 @@ export interface DashboardEvent {
   poster?: string | null;
   posterPreview?: string | null;
 
-  status?: string;
   isPublished?: boolean;
 
   quota?: number;
@@ -221,7 +221,6 @@ export interface DashboardEvent {
 
   categories?: DashboardEventCategory[];
 }
-
 export interface DashboardTransaction {
   id: string;
   name?: string | null;
@@ -252,6 +251,7 @@ export interface SuperAdminEvent {
   date?: DateLike | null;
   startDate?: DateLike | null;
 
+  status?: string;
   isPublished: boolean;
 
   createdAt: DateLike;

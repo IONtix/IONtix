@@ -253,7 +253,7 @@ export default function EventFormRenang() {
         customFields: customFields,
       };
 
-      const result = await createEvent(payload, true);
+      const result = await createEvent(payload, "SUBMIT_REVIEW");
       if (!result.success)
         throw new Error(result.error || "Gagal membuat event renang");
 

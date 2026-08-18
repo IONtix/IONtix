@@ -36,6 +36,8 @@ type EventAddonInput = {
   imageUrl?: string | null;
 };
 
+type EventSubmissionMode = "DRAFT" | "SUBMIT_REVIEW";
+
 type EventPayload = {
   title?: string;
   category?: string | null;
@@ -83,6 +85,38 @@ const toNumber = (
 
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const parseJakartaDateTime = (
+  value: string | Date | null | undefined,
+): Date | null => {
+  if (!value) {
+    return null;
+  }
+
+  if (value instanceof Date) {
+    return new Date(value.getTime());
+  }
+
+  const normalized = value.trim();
+
+  if (!normalized) {
+    return null;
+  }
+
+  /*
+   * datetime-local menghasilkan:
+   * YYYY-MM-DDTHH:mm
+   *
+   * IONtix menggunakan Asia/Jakarta (UTC+7).
+   * Karena itu input tanpa timezone harus diperlakukan
+   * sebagai waktu WIB, bukan UTC/server timezone.
+   */
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(normalized)) {
+    return new Date(`${normalized}:00+07:00`);
+  }
+
+  return new Date(normalized);
 };
 
 const toJsonValue = (value: unknown): Prisma.InputJsonValue | undefined => {
@@ -168,10 +202,9 @@ const formatAddons = (addons: EventAddonInput[] | undefined) => {
  */
 export async function createEvent(
   payload: EventPayload,
-  _isPublished: boolean,
+  submissionMode: EventSubmissionMode,
 ): Promise<EventActionResult> {
   try {
-    void _isPublished;
 
     const user = await requireAuth();
     const membership = await requireOrganizationMembership();
@@ -197,16 +230,18 @@ export async function createEvent(
       };
     }
 
-    const eventDate = new Date(payload.date);
+    const eventDate = parseJakartaDateTime(payload.date);
 
-    if (Number.isNaN(eventDate.getTime())) {
+    if (!eventDate || Number.isNaN(eventDate.getTime())) {
       return {
         success: false,
         error: "Tanggal event tidak valid.",
       };
     }
 
-    const endDate = payload.endDate ? new Date(payload.endDate) : null;
+    const endDate = payload.endDate
+      ? parseJakartaDateTime(payload.endDate)
+      : null;
 
     if (endDate && Number.isNaN(endDate.getTime())) {
       return {
@@ -226,6 +261,10 @@ export async function createEvent(
     const formattedAddons = formatAddons(payload.addons);
 
     const isSuperAdmin = user.role === "SUPER_ADMIN";
+
+    const shouldPublish = isSuperAdmin;
+    const shouldSubmitForReview =
+      !isSuperAdmin && submissionMode === "SUBMIT_REVIEW";
 
     const newEvent = await prisma.event.create({
       data: {
@@ -249,9 +288,13 @@ export async function createEvent(
         organizationId: membership.organizationId,
         eoId: user.id,
 
-        status: isSuperAdmin ? "PUBLISHED" : "PENDING_REVIEW",
-        isPublished: isSuperAdmin,
-        publishedAt: isSuperAdmin ? new Date() : null,
+        status: shouldPublish
+          ? "PUBLISHED"
+          : shouldSubmitForReview
+            ? "PENDING_REVIEW"
+            : "DRAFT",
+        isPublished: shouldPublish,
+        publishedAt: shouldPublish ? new Date() : null,
 
         categories:
           formattedCategories.length > 0
@@ -269,9 +312,11 @@ export async function createEvent(
 
     return {
       success: true,
-      message: isSuperAdmin
+      message: shouldPublish
         ? "Event berhasil dibuat dan dipublikasikan."
-        : "Event berhasil dibuat dan menunggu review.",
+        : shouldSubmitForReview
+          ? "Event berhasil dibuat dan menunggu review."
+          : "Draft event berhasil disimpan.",
       data: newEvent,
     };
   } catch (error: unknown) {
@@ -340,7 +385,7 @@ export async function getEvents(): Promise<
         time: event.date.toISOString(),
         bannerUrl: event.imageUrl,
         imageUrl: event.imageUrl,
-        status: event.status.toLowerCase(),
+        status: event.status,
         isPublished: event.isPublished,
         quota: totalQuota,
         soldTickets: 0,
@@ -522,7 +567,7 @@ export async function getEventById(
 export async function updateEvent(
   eventId: string,
   payload: EventPayload,
-  isPublished: boolean,
+  submissionMode: EventSubmissionMode,
 ): Promise<EventActionResult> {
   try {
     const access = await requireEventPermission(
@@ -564,9 +609,11 @@ export async function updateEvent(
       };
     }
 
-    const date = payload.date ? new Date(payload.date) : access.event.date;
+    const date = payload.date
+      ? parseJakartaDateTime(payload.date)
+      : access.event.date;
 
-    if (Number.isNaN(date.getTime())) {
+    if (!date || Number.isNaN(date.getTime())) {
       return {
         success: false,
         error: "Tanggal event tidak valid.",
@@ -577,7 +624,7 @@ export async function updateEvent(
       payload.endDate === null
         ? null
         : payload.endDate
-          ? new Date(payload.endDate)
+          ? parseJakartaDateTime(payload.endDate)
           : access.event.endDate;
 
     if (endDate && Number.isNaN(endDate.getTime())) {
@@ -594,7 +641,13 @@ export async function updateEvent(
       };
     }
 
-    const wantsToPublish = Boolean(isPublished) && user.role === "SUPER_ADMIN";
+    const wantsToPublish = user.role === "SUPER_ADMIN";
+    const wantsReview =
+      user.role !== "SUPER_ADMIN" &&
+      (
+        submissionMode === "SUBMIT_REVIEW" ||
+        access.event.status === "PUBLISHED"
+      );
 
     const updateData: Prisma.EventUpdateInput = {
       title: payload.title?.trim() || access.event.title,
@@ -631,9 +684,9 @@ export async function updateEvent(
 
       status: wantsToPublish
         ? "PUBLISHED"
-        : user.role === "SUPER_ADMIN"
-          ? access.event.status
-          : "PENDING_REVIEW",
+        : wantsReview
+          ? "PENDING_REVIEW"
+          : "DRAFT",
 
       isPublished: wantsToPublish,
 
@@ -686,7 +739,9 @@ export async function updateEvent(
       message:
         user.role === "SUPER_ADMIN"
           ? "Event berhasil diperbarui."
-          : "Event berhasil diperbarui dan menunggu review.",
+          : wantsReview
+            ? "Event berhasil diperbarui dan menunggu review."
+            : "Draft event berhasil diperbarui.",
       data: updatedEvent,
     };
   } catch (error: unknown) {

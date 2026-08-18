@@ -7,6 +7,7 @@ import {
   Plus,
   Trash2,
   Save,
+  Send,
   Activity,
   Image as ImageIcon,
   Loader2,
@@ -64,6 +65,39 @@ export interface AddonModule {
   details?: JsonObject; // Untuk data spesifik seperti ukuran baju, rute, dll
 }
 
+const formatDateTimeLocalJakarta = (
+  value: string | Date | null | undefined,
+): string => {
+  if (!value) {
+    return "";
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Jakarta",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  });
+
+  const parts = Object.fromEntries(
+    formatter.formatToParts(date).map((part) => [
+      part.type,
+      part.value,
+    ]),
+  );
+
+  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
+};
+
 interface EventFormProps {
   initialData?: EventFormInitialData;
   eventId?: string | null;
@@ -83,12 +117,8 @@ export default function EventFormLari({
   const [eventDetails, setEventDetails] = useState({
     name: initialData?.title || initialData?.name || "",
     category: initialData?.category || "Lari / Maraton",
-    startDate: initialStartDate
-      ? new Date(initialStartDate).toISOString().slice(0, 16)
-      : "",
-    endDate: initialData?.endDate
-      ? new Date(initialData.endDate).toISOString().slice(0, 16)
-      : "",
+    startDate: formatDateTimeLocalJakarta(initialStartDate),
+    endDate: formatDateTimeLocalJakarta(initialData?.endDate),
     location: initialData?.location || initialData?.locationName || "",
     mapsUrl: initialData?.mapsUrl || "",
     description: initialData?.description || "",
@@ -443,7 +473,10 @@ export default function EventFormLari({
   // --------------------------------------------------------------------------
   // SUBMIT HANDLER
   // --------------------------------------------------------------------------
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (
+    e: React.FormEvent,
+    submissionMode: "DRAFT" | "SUBMIT_REVIEW",
+  ) => {
     e.preventDefault();
     setIsSubmitting(true);
     try {
@@ -466,8 +499,8 @@ export default function EventFormLari({
         addons: addons,
       };
       const result = eventId
-        ? await updateEvent(eventId, payload, true)
-        : await createEvent(payload, true);
+        ? await updateEvent(eventId, payload, submissionMode)
+        : await createEvent(payload, submissionMode);
       if (!result.success)
         throw new Error(result.error || "Gagal memproses event");
       router.push(
@@ -494,7 +527,6 @@ export default function EventFormLari({
 
   return (
     <form
-      onSubmit={handleSubmit}
       onKeyDown={(e) => {
         if (
           e.key === "Enter" &&
@@ -1392,25 +1424,38 @@ export default function EventFormLari({
         </section>
 
         {/* ========================================== */}
-        {/* TOMBOL SIMPAN                              */}
+        {/* ACTION WORKFLOW                            */}
         {/* ========================================== */}
-        <div className="pt-2">
+        <div className="pt-2 grid grid-cols-1 md:grid-cols-2 gap-4">
           <button
-            type="submit"
+            type="button"
             disabled={isSubmitting}
-            className={`w-full py-5 text-white rounded-2xl font-black uppercase tracking-widest flex items-center justify-center gap-3 shadow-xl transition-all text-base ${isSubmitting ? "bg-slate-400 cursor-not-allowed" : "bg-linear-to-r from-blue-700 to-blue-500 hover:shadow-2xl hover:-translate-y-1 cursor-pointer"}`}
+            onClick={(event) => void handleSubmit(event, "DRAFT")}
+            className="w-full py-4 rounded-2xl border-2 border-slate-200 bg-white text-slate-700 font-black uppercase tracking-widest flex items-center justify-center gap-3 shadow-sm transition-all hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <Save size={22} />
+            Simpan Draft
+          </button>
+
+          <button
+            type="button"
+            disabled={isSubmitting}
+            onClick={(event) => void handleSubmit(event, "SUBMIT_REVIEW")}
+            className={`w-full py-4 rounded-2xl text-white font-black uppercase tracking-widest flex items-center justify-center gap-3 shadow-xl transition-all ${
+              isSubmitting
+                ? "bg-slate-400 cursor-not-allowed"
+                : "bg-linear-to-r from-blue-700 to-blue-500 hover:shadow-2xl hover:-translate-y-1 cursor-pointer"
+            }`}
           >
             {isSubmitting ? (
               <>
-                <Loader2 size={24} className="animate-spin" /> Menyimpan
-                Event...
+                <Loader2 size={22} className="animate-spin" />
+                Menyimpan Event...
               </>
             ) : (
               <>
-                <Save size={24} />{" "}
-                {eventId
-                  ? "Simpan Perubahan Event"
-                  : "Simpan & Terbitkan Event"}
+                <Send size={22} />
+                Kirim untuk Review
               </>
             )}
           </button>
