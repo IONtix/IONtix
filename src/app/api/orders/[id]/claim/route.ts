@@ -6,7 +6,7 @@ import {
   authorizationErrorResponse,
   requireAuth,
 } from "@/lib/auth/authorization";
-import { requireEventAccess } from "@/lib/auth/organization";
+import { requireEventPermission } from "@/lib/auth/organization";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -19,7 +19,10 @@ async function assertOrderClaimAccess(
   const user = await requireAuth();
 
   try {
-    await requireEventAccess(eventId);
+    await requireEventPermission(
+      eventId,
+      "participants.manage",
+    );
     return user;
   } catch (error) {
     if (

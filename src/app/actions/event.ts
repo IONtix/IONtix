@@ -10,8 +10,9 @@ import type { DashboardEvent } from "@/lib/platform-types";
 import { AuthorizationError, requireAuth } from "@/lib/auth/authorization";
 
 import {
-  requireEventAccess,
+  requireEventPermission,
   requireOrganizationMembership,
+  requireOrganizationPermission,
 } from "@/lib/auth/organization";
 
 type EventCategoryInput = {
@@ -175,6 +176,11 @@ export async function createEvent(
     const user = await requireAuth();
     const membership = await requireOrganizationMembership();
 
+    await requireOrganizationPermission(
+      membership.organizationId,
+      "events.manage",
+    );
+
     const title = payload.title?.trim() || "";
 
     if (!title) {
@@ -295,6 +301,13 @@ export async function getEvents(): Promise<
         ? null
         : await requireOrganizationMembership();
 
+    if (membership) {
+      await requireOrganizationPermission(
+        membership.organizationId,
+        "events.view",
+      );
+    }
+
     const events = await prisma.event.findMany({
       where:
         user.role === "SUPER_ADMIN"
@@ -365,7 +378,10 @@ export async function deleteEventWithPassword(
   passwordInput: string,
 ): Promise<EventActionResult> {
   try {
-    const access = await requireEventAccess(eventId);
+    const access = await requireEventPermission(
+      eventId,
+      "events.manage",
+    );
 
     const currentUser = await prisma.user.findUnique({
       where: {
@@ -461,7 +477,10 @@ export async function getEventById(
   eventId: string,
 ): Promise<EventActionResult> {
   try {
-    const access = await requireEventAccess(eventId);
+    const access = await requireEventPermission(
+      eventId,
+      "events.view",
+    );
 
     const event = await prisma.event.findUnique({
       where: {
@@ -506,7 +525,10 @@ export async function updateEvent(
   isPublished: boolean,
 ): Promise<EventActionResult> {
   try {
-    const access = await requireEventAccess(eventId);
+    const access = await requireEventPermission(
+      eventId,
+      "events.manage",
+    );
     const user = access.user;
 
     const existingOrderCount = await prisma.order.count({
@@ -713,7 +735,10 @@ export async function updateParticipantStatus(
       };
     }
 
-    const access = await requireEventAccess(order.eventId);
+    const access = await requireEventPermission(
+      order.eventId,
+      "participants.manage",
+    );
 
     const updatedOrder = await prisma.order.update({
       where: {

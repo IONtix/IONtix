@@ -5,7 +5,7 @@ import {
   authorizationErrorResponse,
   requireAuth,
 } from "@/lib/auth/authorization";
-import { requireEventAccess } from "@/lib/auth/organization";
+import { requireAnyEventPermission } from "@/lib/auth/organization";
 import { AuthorizationError } from "@/lib/auth/authorization";
 
 type RouteContext = {
@@ -16,10 +16,19 @@ async function assertOrderAccess(orderEmail: string | null, eventId: string) {
   const user = await requireAuth();
 
   /*
-   * Event owner/member or SUPER_ADMIN may access the order.
+   * EO/Staff:
+   * - harus memiliki akses ke event
+   * - dan memiliki minimal salah satu permission:
+   *   orders.view atau participants.view
+   *
+   * Participant:
+   * - tetap boleh mengakses order miliknya sendiri.
    */
   try {
-    await requireEventAccess(eventId);
+    await requireAnyEventPermission(
+      eventId,
+      ["orders.view", "participants.view"],
+    );
     return user;
   } catch (error) {
     /*
