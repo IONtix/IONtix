@@ -178,12 +178,61 @@ export async function confirmPayment(
               id: payment.id,
             },
             select: {
+              id: true,
               status: true,
+              amount: true,
+              externalId: true,
+              paidAt: true,
             },
           });
 
+          if (!latest) {
+            throw new Error("Payment gagal dimuat kembali.");
+          }
+
+          /*
+           * Stale callback protection:
+           *
+           * Jika payment sudah SUCCESS tetapi provider mengirim
+           * callback lama seperti PENDING / FAILED / CANCELLED /
+           * EXPIRED, callback tersebut tidak boleh menurunkan
+           * state payment yang sudah final.
+           *
+           * REFUNDED dan PARTIALLY_REFUNDED tetap diproses karena
+           * keduanya merupakan transisi pasca-pembayaran yang valid.
+           */
+          const isStaleAfterSuccess =
+            latest.status === PaymentStatus.SUCCESS &&
+            (
+              normalizedStatus === PaymentStatus.PENDING ||
+              normalizedStatus === PaymentStatus.FAILED ||
+              normalizedStatus === PaymentStatus.CANCELLED ||
+              normalizedStatus === PaymentStatus.EXPIRED
+            );
+
+          if (isStaleAfterSuccess) {
+            const currentTickets = await tx.ticket.findMany({
+              where: {
+                orderId: order.id,
+              },
+              select: {
+                id: true,
+              },
+            });
+
+            return {
+              success: true,
+              paymentId: latest.id,
+              orderId: order.id,
+              paymentStatus: PaymentStatus.SUCCESS,
+              orderStatus: OrderStatus.PAID,
+              ticketIds: currentTickets.map((ticket) => ticket.id),
+              alreadyProcessed: true,
+            };
+          }
+
           if (
-            latest?.status !== PaymentStatus.SUCCESS ||
+            latest.status !== PaymentStatus.SUCCESS ||
             normalizedStatus !== PaymentStatus.SUCCESS
           ) {
             throw new Error(
