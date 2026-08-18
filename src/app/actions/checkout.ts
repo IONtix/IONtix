@@ -622,7 +622,6 @@ export async function processCheckout(
      * Ticket hanya boleh dibuat setelah Payment = SUCCESS
      * pada tahap payment confirmation/webhook berikutnya.
      */
-    void paymentSessions;
 
     /*
      * totalAmount dari browser hanya digunakan sebagai diagnostik.
@@ -644,6 +643,7 @@ export async function processCheckout(
       success: true,
       message: "Pesanan berhasil dibuat dan menunggu pembayaran.",
       orderIds: prepared.map((item) => item.orderId),
+      paymentSessions,
     };
   } catch (error: unknown) {
     console.error("=== ERROR CHECKOUT ===", error);

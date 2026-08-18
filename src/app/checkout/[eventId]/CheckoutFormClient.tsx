@@ -2,7 +2,13 @@
 
 import { processCheckout } from "@/app/actions/checkout";
 import Image from "next/image";
-import type { CheckoutAddonData, CheckoutEventData, CheckoutTicketData, CustomFieldDefinition } from "@/lib/platform-types";
+import type {
+  CheckoutAddonData,
+  CheckoutEventData,
+  CheckoutPaymentSession,
+  CheckoutTicketData,
+  CustomFieldDefinition,
+} from "@/lib/platform-types";
 import React, { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -64,6 +70,9 @@ export default function CheckoutFormClient({
 
   // STATE: Pembayaran
   const [paymentMethod, setPaymentMethod] = useState<string>("");
+  const [paymentSessions, setPaymentSessions] = useState<
+    CheckoutPaymentSession[]
+  >([]);
 
   // =========================================================================
   // LOGIKA: KALKULASI HARGA & JUMLAH
@@ -211,6 +220,7 @@ export default function CheckoutFormClient({
       const response = await processCheckout(payload);
 
       if (response.success) {
+        setPaymentSessions(response.paymentSessions);
         setCurrentStep(4);
       } else {
         alert(response.error);
@@ -782,13 +792,70 @@ export default function CheckoutFormClient({
             </div>
           )}
           {currentStep === 4 && (
-            <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm text-center">
-              <h2 className="text-2xl font-black text-slate-900 mb-2">
-                Selesaikan Pembayaran Anda
-              </h2>
-              <p className="text-slate-500 mb-8">
-                Pesanan berhasil dibuat. Segera selesaikan pembayaran.
-              </p>
+            <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm text-center space-y-6">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
+                <CheckCircle2 size={34} />
+              </div>
+
+              <div>
+                <h2 className="text-2xl font-black text-slate-900 mb-2">
+                  Pesanan Berhasil Dibuat
+                </h2>
+                <p className="text-slate-500">
+                  Pilih sesi pembayaran di bawah untuk melanjutkan pembayaran.
+                </p>
+              </div>
+
+              {paymentSessions.length > 0 ? (
+                <div className="space-y-3 text-left">
+                  {paymentSessions.map((session) => (
+                    <div
+                      key={session.externalId}
+                      className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
+                    >
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                            Status Pembayaran
+                          </p>
+                          <p className="mt-1 font-bold text-slate-900">
+                            {session.status}
+                          </p>
+                          <p className="mt-1 break-all font-mono text-[11px] text-slate-400">
+                            {session.externalId}
+                          </p>
+                        </div>
+
+                        {session.checkoutUrl ? (
+                          <a
+                            href={session.checkoutUrl}
+                            className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white transition-all hover:bg-emerald-700"
+                          >
+                            Lanjut ke Pembayaran
+                            <ArrowRight size={18} />
+                          </a>
+                        ) : (
+                          <span className="rounded-xl bg-slate-200 px-4 py-3 text-xs font-bold text-slate-500">
+                            Sesi pembayaran belum tersedia
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-left">
+                  <p className="font-bold text-amber-900">
+                    Sesi pembayaran belum tersedia
+                  </p>
+                  <p className="mt-1 text-sm leading-6 text-amber-700">
+                    Pesanan sudah berhasil dibuat, tetapi sesi pembayaran
+                    belum tersedia. Silakan cek status pesanan Anda atau
+                    coba kembali beberapa saat lagi.
+                  </p>
+                </div>
+              )}
+
               <button
                 onClick={() => router.push("/dashboard")}
                 className="px-8 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition-all"
