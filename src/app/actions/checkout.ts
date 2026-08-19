@@ -518,6 +518,57 @@ export async function processCheckout(
             : ApprovalStatus.NONE;
 
           /*
+           * ============================================================
+           * PARTICIPANT ENROLLMENT
+           * ============================================================
+           *
+           * Participant menjadi canonical identity entity.
+           * userId adalah anchor utama sehingga checkout berulang
+           * tidak membuat Participant duplikat untuk user yang sama.
+           */
+          const participantRecord = await tx.participant.upsert({
+            where: {
+              userId: user.id,
+            },
+            create: {
+              userId: user.id,
+              fullName,
+              email,
+              phone,
+              bloodType: participant.bloodType?.trim() || null,
+            },
+            update: {
+              fullName,
+              email,
+              phone,
+              bloodType: participant.bloodType?.trim() || null,
+            },
+            select: {
+              id: true,
+            },
+          });
+
+          /*
+           * ParticipantEvent menjadi canonical enrollment ledger.
+           * Unique(participantId, eventId) membuat operasi ini
+           * idempotent untuk checkout berulang pada event yang sama.
+           */
+          await tx.participantEvent.upsert({
+            where: {
+              participantId_eventId: {
+                participantId: participantRecord.id,
+                eventId,
+              },
+            },
+            create: {
+              participantId: participantRecord.id,
+              eventId,
+              approvalStatus: statusApproval,
+            },
+            update: {},
+          });
+
+          /*
            * Add-on hanya ditempatkan pada order pertama,
            * mengikuti perilaku checkout lama.
            */
@@ -531,6 +582,7 @@ export async function processCheckout(
             data: {
               eventId,
               buyerUserId: user.id,
+              participantId: participantRecord.id,
               fullName,
               email,
               phone,
