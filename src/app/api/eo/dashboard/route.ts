@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 
 import prisma from "@/lib/prisma";
 import {
+  CheckInStatus,
+  OrderStatus,
+} from "@/generated/prisma/client";
+import {
   authorizationErrorResponse,
   requireAuth,
 } from "@/lib/auth/authorization";
@@ -127,6 +131,8 @@ export async function GET(request: Request) {
             totalKapasitas,
             pesertaCheckIn: 0,
             menungguCheckIn: 0,
+            racepackDiambil: 0,
+            racepackBelumDiambil: 0,
             saldoSiapCair: 0,
           },
           salesChart: [],
@@ -164,24 +170,81 @@ export async function GET(request: Request) {
       0,
     );
 
-    const totalTiketTerjual = await prisma.ticket.count({
-      where: {
-        categoryId: {
-          in: categoryIds,
-        },
-      },
-    });
+    /*
+     * ============================================================
+     * CANONICAL OPERATIONAL METRICS
+     * ============================================================
+     *
+     * Ticket sold:
+     *   Ticket yang terhubung ke Order PAID.
+     *
+     * Check-in:
+     *   CheckIn.status = CHECKED_IN.
+     *
+     * Racepack:
+     *   Order.isClaimed menjadi source of truth.
+     *
+     * Semua query tetap berada di event/category scope
+     * yang sudah lolos authorization di atas.
+     */
 
-    const pesertaCheckIn = await prisma.ticket.count({
-      where: {
-        categoryId: {
-          in: categoryIds,
-        },
-        isScanned: true,
-      },
-    });
+    const eventIds = scopedEvents.map(
+      (event) => event.id,
+    );
 
-    const menungguCheckIn = Math.max(0, totalTiketTerjual - pesertaCheckIn);
+    const paidTicketWhere = {
+      categoryId: {
+        in: categoryIds,
+      },
+      order: {
+        status: OrderStatus.PAID,
+      },
+    };
+
+    const [
+      totalTiketTerjual,
+      pesertaCheckIn,
+      racepackDiambil,
+      racepackBelumDiambil,
+    ] = await Promise.all([
+      prisma.ticket.count({
+        where: paidTicketWhere,
+      }),
+
+      prisma.checkIn.count({
+        where: {
+          eventId: {
+            in: eventIds,
+          },
+          status: CheckInStatus.CHECKED_IN,
+        },
+      }),
+
+      prisma.ticket.count({
+        where: {
+          ...paidTicketWhere,
+          order: {
+            status: OrderStatus.PAID,
+            isClaimed: true,
+          },
+        },
+      }),
+
+      prisma.ticket.count({
+        where: {
+          ...paidTicketWhere,
+          order: {
+            status: OrderStatus.PAID,
+            isClaimed: false,
+          },
+        },
+      }),
+    ]);
+
+    const menungguCheckIn = Math.max(
+      0,
+      totalTiketTerjual - pesertaCheckIn,
+    );
 
     /*
      * Grafik penjualan 7 hari terakhir.
@@ -286,6 +349,8 @@ export async function GET(request: Request) {
           totalKapasitas,
           pesertaCheckIn,
           menungguCheckIn,
+          racepackDiambil,
+          racepackBelumDiambil,
           saldoSiapCair: totalPendapatan,
         },
         salesChart,
