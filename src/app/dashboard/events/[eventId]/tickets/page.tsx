@@ -4,13 +4,19 @@ import { Label } from "@/components/ui/label";
 import Link from "next/link";
 import prisma from "@/lib/prisma";
 import { redirect } from "next/navigation";
+import { requireEventPermission } from "@/lib/auth/organization";
 
 export default async function ManageTicketsPage({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: Promise<{ eventId: string }>;
 }) {
-  const { id: eventId } = await params;
+  const { eventId } = await params;
+
+  await requireEventPermission(
+    eventId,
+    "events.manage",
+  );
 
   // 1. Ambil data Event berdasarkan ID
   const event = await prisma.event.findUnique({
@@ -28,11 +34,50 @@ export default async function ManageTicketsPage({
   async function addTicketCategory(formData: FormData) {
     "use server";
 
-    const name = formData.get("name") as string;
-    const price = parseInt(formData.get("price") as string);
-    const capacity = parseInt(formData.get("quota") as string); // 👈 Ambil input quota
+    await requireEventPermission(
+      eventId,
+      "events.manage",
+    );
 
-    // Simpan ke database Supabase (menggunakan field 'capacity')
+    const name =
+      String(
+        formData.get("name") ?? "",
+      ).trim();
+
+    const price =
+      Number(
+        formData.get("price"),
+      );
+
+    const capacity =
+      Number(
+        formData.get("quota"),
+      );
+
+    if (!name) {
+      throw new Error(
+        "Nama kategori tiket wajib diisi.",
+      );
+    }
+
+    if (
+      !Number.isInteger(price) ||
+      price < 0
+    ) {
+      throw new Error(
+        "Harga tiket tidak valid.",
+      );
+    }
+
+    if (
+      !Number.isInteger(capacity) ||
+      capacity <= 0
+    ) {
+      throw new Error(
+        "Kuota tiket harus lebih dari 0.",
+      );
+    }
+
     await prisma.ticketCategory.create({
       data: {
         name: name,

@@ -2,6 +2,7 @@ import Link from "next/link";
 import Image from "next/image";
 import prisma from "@/lib/prisma";
 import { notFound } from "next/navigation";
+import { requireEventPermission } from "@/lib/auth/organization";
 import { getEventStatusMeta } from "@/lib/events/status";
 import {
   ChevronLeft,
@@ -23,6 +24,11 @@ export default async function EventDetailPage({
   params: Promise<{ eventId: string }>;
 }) {
   const { eventId } = await params;
+
+  await requireEventPermission(
+    eventId,
+    "events.manage",
+  );
 
   // Ambil detail event beserta relasinya
   const event = await prisma.event.findUnique({
