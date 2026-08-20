@@ -613,7 +613,29 @@ export async function GET(request: Request) {
      * Karena order desc, order pertama adalah
      * order terbaru untuk pair participantId:eventId.
      */
+    /*
+     * ============================================================
+     * OPERATIONAL TRUTH
+     * ============================================================
+     *
+     * latestOrder:
+     *   order terbaru, apa pun statusnya.
+     *
+     * operationalOrder:
+     *   order terbaru yang sudah memiliki ticket.
+     *
+     * Ini penting ketika peserta mempunyai histori:
+     *   PAID → EXPIRED → FAILED
+     *
+     * Order terakhir tidak selalu merepresentasikan ticket
+     * yang sedang aktif.
+     */
     const latestOrderByPair = new Map<
+      string,
+      (typeof orders)[number]
+    >();
+
+    const operationalOrderByPair = new Map<
       string,
       (typeof orders)[number]
     >();
@@ -629,6 +651,19 @@ export async function GET(request: Request) {
       if (!latestOrderByPair.has(key)) {
         latestOrderByPair.set(key, order);
       }
+
+      const hasTicket =
+        order.tickets.length > 0;
+
+      if (
+        hasTicket &&
+        !operationalOrderByPair.has(key)
+      ) {
+        operationalOrderByPair.set(
+          key,
+          order,
+        );
+      }
     }
 
     const data = orderedEnrollments.map(
@@ -639,11 +674,17 @@ export async function GET(request: Request) {
         const order =
           latestOrderByPair.get(key) ?? null;
 
+        const operationalOrder =
+          operationalOrderByPair.get(key) ??
+          null;
+
         const payment =
-          order?.payments[0] ?? null;
+          order?.payments[0] ??
+          operationalOrder?.payments[0] ??
+          null;
 
         const ticket =
-          order?.tickets.find(
+          operationalOrder?.tickets.find(
             (item) =>
               item.eventId ===
                 enrollment.eventId &&
@@ -722,7 +763,9 @@ export async function GET(request: Request) {
             : null,
 
           racepackClaimed:
-            order?.isClaimed ?? false,
+            operationalOrder?.isClaimed ??
+            order?.isClaimed ??
+            false,
         };
       },
     );
