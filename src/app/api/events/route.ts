@@ -45,6 +45,15 @@ const toNumber = (value: string | number | undefined): number => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
+/**
+ * @deprecated
+ * Legacy event creation endpoint.
+ *
+ * Canonical event creation now lives in:
+ *   src/app/actions/event.ts -> createEvent()
+ *
+ * Do not add new consumers to this route.
+ */
 export async function POST(request: Request) {
   try {
     const user = await requireAuth();
