@@ -5,9 +5,7 @@ import {
   authorizationErrorResponse,
   requireAuth,
 } from "@/lib/auth/authorization";
-import {
-  requireResolvedOrganizationPermission,
-} from "@/lib/auth/organization";
+import { requireResolvedOrganizationPermission } from "@/lib/auth/organization";
 import {
   CheckInStatus,
   OrderStatus,
@@ -28,10 +26,7 @@ const CHECKIN_STATUSES = new Set(Object.values(CheckInStatus));
 type SortField = "createdAt" | "name" | "eventTitle";
 type SortDirection = "asc" | "desc";
 
-function parsePositiveInt(
-  value: string | null,
-  fallback: number,
-): number {
+function parsePositiveInt(value: string | null, fallback: number): number {
   if (!value) {
     return fallback;
   }
@@ -62,11 +57,7 @@ function parseEnumFilter<T extends string>(
 }
 
 function parseSort(value: string | null): SortField {
-  if (
-    value === "createdAt" ||
-    value === "name" ||
-    value === "eventTitle"
-  ) {
+  if (value === "createdAt" || value === "name" || value === "eventTitle") {
     return value;
   }
 
@@ -77,10 +68,7 @@ function parseDirection(value: string | null): SortDirection {
   return value === "asc" ? "asc" : "desc";
 }
 
-function sortSql(
-  sort: SortField,
-  direction: SortDirection,
-): Prisma.Sql {
+function sortSql(sort: SortField, direction: SortDirection): Prisma.Sql {
   const directionSql = Prisma.raw(direction.toUpperCase());
 
   switch (sort) {
@@ -113,37 +101,24 @@ export async function GET(request: Request) {
     const organizationId =
       searchParams.get("organizationId")?.trim() || undefined;
 
-    const requestedEventId =
-      searchParams.get("eventId")?.trim() || null;
+    const requestedEventId = searchParams.get("eventId")?.trim() || null;
 
-    const requestedCategoryId =
-      searchParams.get("categoryId")?.trim() || null;
+    const requestedCategoryId = searchParams.get("categoryId")?.trim() || null;
 
-    const search =
-      searchParams.get("search")?.trim() || null;
+    const search = searchParams.get("search")?.trim() || null;
 
-    const page = parsePositiveInt(
-      searchParams.get("page"),
-      DEFAULT_PAGE,
-    );
+    const page = parsePositiveInt(searchParams.get("page"), DEFAULT_PAGE);
 
     const requestedPageSize = parsePositiveInt(
       searchParams.get("pageSize"),
       DEFAULT_PAGE_SIZE,
     );
 
-    const pageSize = Math.min(
-      requestedPageSize,
-      MAX_PAGE_SIZE,
-    );
+    const pageSize = Math.min(requestedPageSize, MAX_PAGE_SIZE);
 
-    const sort = parseSort(
-      searchParams.get("sort"),
-    );
+    const sort = parseSort(searchParams.get("sort"));
 
-    const direction = parseDirection(
-      searchParams.get("direction"),
-    );
+    const direction = parseDirection(searchParams.get("direction"));
 
     const orderStatus = parseEnumFilter(
       searchParams.get("orderStatus"),
@@ -169,8 +144,7 @@ export async function GET(request: Request) {
       "checkInStatus",
     );
 
-    const racepackStatus =
-      searchParams.get("racepackStatus")?.trim() || null;
+    const racepackStatus = searchParams.get("racepackStatus")?.trim() || null;
 
     if (
       racepackStatus &&
@@ -190,14 +164,12 @@ export async function GET(request: Request) {
     let scopedOrganizationId: string | null = null;
 
     if (user.role !== "SUPER_ADMIN") {
-      const membership =
-        await requireResolvedOrganizationPermission(
-          organizationId,
-          "participants.view",
-        );
+      const membership = await requireResolvedOrganizationPermission(
+        organizationId,
+        "participants.view",
+      );
 
-      scopedOrganizationId =
-        membership.organizationId;
+      scopedOrganizationId = membership.organizationId;
     } else if (organizationId) {
       /*
        * SUPER_ADMIN boleh menggunakan organizationId
@@ -210,21 +182,19 @@ export async function GET(request: Request) {
      * EventId harus berada di dalam organization scope.
      */
     if (requestedEventId) {
-      const scopedEvent =
-        await prisma.event.findFirst({
-          where: {
-            id: requestedEventId,
-            ...(scopedOrganizationId
-              ? {
-                  organizationId:
-                    scopedOrganizationId,
-                }
-              : {}),
-          },
-          select: {
-            id: true,
-          },
-        });
+      const scopedEvent = await prisma.event.findFirst({
+        where: {
+          id: requestedEventId,
+          ...(scopedOrganizationId
+            ? {
+                organizationId: scopedOrganizationId,
+              }
+            : {}),
+        },
+        select: {
+          id: true,
+        },
+      });
 
       if (!scopedEvent) {
         return NextResponse.json(
@@ -250,20 +220,14 @@ export async function GET(request: Request) {
      * sehingga participant multi-event tidak dapat mencampur
      * order/payment/ticket/check-in dari event lain.
      */
-    const whereParts: Prisma.Sql[] = [
-      Prisma.sql`1 = 1`,
-    ];
+    const whereParts: Prisma.Sql[] = [Prisma.sql`1 = 1`];
 
     if (scopedOrganizationId) {
-      whereParts.push(
-        Prisma.sql`e."organizationId" = ${scopedOrganizationId}`,
-      );
+      whereParts.push(Prisma.sql`e."organizationId" = ${scopedOrganizationId}`);
     }
 
     if (requestedEventId) {
-      whereParts.push(
-        Prisma.sql`pe."eventId" = ${requestedEventId}`,
-      );
+      whereParts.push(Prisma.sql`pe."eventId" = ${requestedEventId}`);
     }
 
     if (search) {
@@ -382,23 +346,22 @@ export async function GET(request: Request) {
       );
     }
 
-    const whereSql = Prisma.join(
-      whereParts,
-      " AND ",
-    );
-
-    const orderBySql = sortSql(
-      sort,
-      direction,
-    );
+    const whereSql = Prisma.join(whereParts, " AND ");
 
     /*
      * ============================================================
-     * COUNT + PAGE
+     * FILTER-AWARE OPERATIONAL SUMMARY
      * ============================================================
+     *
+     * Semua KPI menggunakan filter scope yang sama dengan tabel.
+     * Jadi KPI tidak berubah hanya karena pageSize berubah.
      */
-    const totalRows =
-      await prisma.$queryRaw<Array<{ count: bigint }>>(
+    const [
+      filteredParticipantCount,
+      filteredActiveTicketCount,
+      filteredCheckedInCount,
+    ] = await Promise.all([
+      prisma.$queryRaw<Array<{ count: bigint }>>(
         Prisma.sql`
           SELECT COUNT(*)::bigint AS count
           FROM "ParticipantEvent" pe
@@ -408,24 +371,82 @@ export async function GET(request: Request) {
             ON e."id" = pe."eventId"
           WHERE ${whereSql}
         `,
-      );
+      ),
 
-    const total = Number(
-      totalRows[0]?.count ?? BigInt(0),
+      prisma.$queryRaw<Array<{ count: bigint }>>(
+        Prisma.sql`
+          SELECT COUNT(*)::bigint AS count
+          FROM "Ticket" t
+          INNER JOIN "ParticipantEvent" pe
+            ON pe."participantId" = t."participantId"
+            AND pe."eventId" = t."eventId"
+          INNER JOIN "Participant" p
+            ON p."id" = pe."participantId"
+          INNER JOIN "Event" e
+            ON e."id" = pe."eventId"
+          WHERE
+            ${whereSql}
+            AND t."status" = 'ACTIVE'
+        `,
+      ),
+
+      prisma.$queryRaw<Array<{ count: bigint }>>(
+        Prisma.sql`
+          SELECT COUNT(*)::bigint AS count
+          FROM "ParticipantEvent" pe
+          INNER JOIN "Participant" p
+            ON p."id" = pe."participantId"
+          INNER JOIN "Event" e
+            ON e."id" = pe."eventId"
+          WHERE
+            ${whereSql}
+            AND EXISTS (
+              SELECT 1
+              FROM "CheckIn" ci
+              WHERE
+                ci."participantId" = pe."participantId"
+                AND ci."eventId" = pe."eventId"
+                AND ci."status" = 'CHECKED_IN'
+            )
+        `,
+      ),
+    ]);
+
+    const summary = {
+      totalParticipants: Number(
+        filteredParticipantCount[0]?.count ?? BigInt(0),
+      ),
+      activeTickets: Number(filteredActiveTicketCount[0]?.count ?? BigInt(0)),
+      checkedIn: Number(filteredCheckedInCount[0]?.count ?? BigInt(0)),
+    };
+
+    const orderBySql = sortSql(sort, direction);
+
+    /*
+     * ============================================================
+     * COUNT + PAGE
+     * ============================================================
+     */
+    const totalRows = await prisma.$queryRaw<Array<{ count: bigint }>>(
+      Prisma.sql`
+          SELECT COUNT(*)::bigint AS count
+          FROM "ParticipantEvent" pe
+          INNER JOIN "Participant" p
+            ON p."id" = pe."participantId"
+          INNER JOIN "Event" e
+            ON e."id" = pe."eventId"
+          WHERE ${whereSql}
+        `,
     );
 
-    const totalPages =
-      total === 0
-        ? 0
-        : Math.ceil(total / pageSize);
+    const total = Number(totalRows[0]?.count ?? BigInt(0));
+
+    const totalPages = total === 0 ? 0 : Math.ceil(total / pageSize);
 
     const offset = (page - 1) * pageSize;
 
-    const pageRows =
-      await prisma.$queryRaw<
-        Array<{ id: string }>
-      >(
-        Prisma.sql`
+    const pageRows = await prisma.$queryRaw<Array<{ id: string }>>(
+      Prisma.sql`
           SELECT pe."id"
           FROM "ParticipantEvent" pe
           INNER JOIN "Participant" p
@@ -437,10 +458,9 @@ export async function GET(request: Request) {
           LIMIT ${pageSize}
           OFFSET ${offset}
         `,
-      );
+    );
 
-    const enrollmentIds =
-      pageRows.map((row) => row.id);
+    const enrollmentIds = pageRows.map((row) => row.id);
 
     if (enrollmentIds.length === 0) {
       return NextResponse.json({
@@ -460,57 +480,50 @@ export async function GET(request: Request) {
      * ENROLLMENT DETAILS
      * ============================================================
      */
-    const enrollments =
-      await prisma.participantEvent.findMany({
-        where: {
-          id: {
-            in: enrollmentIds,
+    const enrollments = await prisma.participantEvent.findMany({
+      where: {
+        id: {
+          in: enrollmentIds,
+        },
+      },
+      select: {
+        id: true,
+        participantId: true,
+        eventId: true,
+        registeredAt: true,
+        approvalStatus: true,
+
+        event: {
+          select: {
+            id: true,
+            title: true,
           },
         },
-        select: {
-          id: true,
-          participantId: true,
-          eventId: true,
-          registeredAt: true,
-          approvalStatus: true,
 
-          event: {
-            select: {
-              id: true,
-              title: true,
-            },
-          },
-
-          participant: {
-            select: {
-              id: true,
-              fullName: true,
-              email: true,
-              phone: true,
-            },
+        participant: {
+          select: {
+            id: true,
+            fullName: true,
+            email: true,
+            phone: true,
           },
         },
-      });
+      },
+    });
 
     /*
      * Prisma tidak menjamin urutan IN(...) mengikuti pageRows.
      * Kita map kembali mengikuti urutan database page.
      */
     const enrollmentById = new Map(
-      enrollments.map((enrollment) => [
-        enrollment.id,
-        enrollment,
-      ]),
+      enrollments.map((enrollment) => [enrollment.id, enrollment]),
     );
 
     const orderedEnrollments = enrollmentIds
       .map((id) => enrollmentById.get(id))
       .filter(
-        (
-          enrollment,
-        ): enrollment is NonNullable<
-          (typeof enrollments)[number]
-        > => Boolean(enrollment),
+        (enrollment): enrollment is NonNullable<(typeof enrollments)[number]> =>
+          Boolean(enrollment),
       );
 
     /*
@@ -519,95 +532,85 @@ export async function GET(request: Request) {
      * ============================================================
      */
     const participantIds = Array.from(
-      new Set(
-        orderedEnrollments.map(
-          (enrollment) =>
-            enrollment.participantId,
-        ),
-      ),
+      new Set(orderedEnrollments.map((enrollment) => enrollment.participantId)),
     );
 
     const eventIds = Array.from(
-      new Set(
-        orderedEnrollments.map(
-          (enrollment) => enrollment.eventId,
-        ),
-      ),
+      new Set(orderedEnrollments.map((enrollment) => enrollment.eventId)),
     );
 
-    const orders =
-      await prisma.order.findMany({
-        where: {
-          participantId: {
-            in: participantIds,
+    const orders = await prisma.order.findMany({
+      where: {
+        participantId: {
+          in: participantIds,
+        },
+        eventId: {
+          in: eventIds,
+        },
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+      select: {
+        id: true,
+        participantId: true,
+        eventId: true,
+        orderNumber: true,
+        status: true,
+        approvalStatus: true,
+        isClaimed: true,
+        totalPrice: true,
+        paidAt: true,
+        createdAt: true,
+
+        payments: {
+          orderBy: {
+            createdAt: "desc",
           },
-          eventId: {
-            in: eventIds,
+          take: 1,
+          select: {
+            status: true,
+            amount: true,
+            paidAt: true,
           },
         },
-        orderBy: {
-          createdAt: "desc",
-        },
-        select: {
-          id: true,
-          participantId: true,
-          eventId: true,
-          orderNumber: true,
-          status: true,
-          approvalStatus: true,
-          isClaimed: true,
-          totalPrice: true,
-          paidAt: true,
-          createdAt: true,
 
-          payments: {
-            orderBy: {
-              createdAt: "desc",
-            },
-            take: 1,
-            select: {
-              status: true,
-              amount: true,
-              paidAt: true,
-            },
+        tickets: {
+          orderBy: {
+            createdAt: "desc",
           },
+          take: 1,
+          select: {
+            id: true,
+            ticketNumber: true,
+            qrCode: true,
+            eventId: true,
+            participantId: true,
+            categoryId: true,
+            status: true,
 
-          tickets: {
-            orderBy: {
-              createdAt: "desc",
-            },
-            take: 1,
-            select: {
-              id: true,
-              ticketNumber: true,
-              qrCode: true,
-              eventId: true,
-              participantId: true,
-              categoryId: true,
-              status: true,
-
-              category: {
-                select: {
-                  id: true,
-                  name: true,
-                },
+            category: {
+              select: {
+                id: true,
+                name: true,
               },
+            },
 
-              checkIns: {
-                orderBy: {
-                  createdAt: "desc",
-                },
-                take: 1,
-                select: {
-                  status: true,
-                  checkedInAt: true,
-                  gate: true,
-                },
+            checkIns: {
+              orderBy: {
+                createdAt: "desc",
+              },
+              take: 1,
+              select: {
+                status: true,
+                checkedInAt: true,
+                gate: true,
               },
             },
           },
         },
-      });
+      },
+    });
 
     /*
      * Karena order desc, order pertama adalah
@@ -630,149 +633,113 @@ export async function GET(request: Request) {
      * Order terakhir tidak selalu merepresentasikan ticket
      * yang sedang aktif.
      */
-    const latestOrderByPair = new Map<
-      string,
-      (typeof orders)[number]
-    >();
+    const latestOrderByPair = new Map<string, (typeof orders)[number]>();
 
-    const operationalOrderByPair = new Map<
-      string,
-      (typeof orders)[number]
-    >();
+    const operationalOrderByPair = new Map<string, (typeof orders)[number]>();
 
     for (const order of orders) {
       if (!order.participantId) {
         continue;
       }
 
-      const key =
-        `${order.participantId}:${order.eventId}`;
+      const key = `${order.participantId}:${order.eventId}`;
 
       if (!latestOrderByPair.has(key)) {
         latestOrderByPair.set(key, order);
       }
 
-      const hasTicket =
-        order.tickets.length > 0;
+      const hasTicket = order.tickets.length > 0;
 
-      if (
-        hasTicket &&
-        !operationalOrderByPair.has(key)
-      ) {
-        operationalOrderByPair.set(
-          key,
-          order,
-        );
+      if (hasTicket && !operationalOrderByPair.has(key)) {
+        operationalOrderByPair.set(key, order);
       }
     }
 
-    const data = orderedEnrollments.map(
-      (enrollment) => {
-        const key =
-          `${enrollment.participantId}:${enrollment.eventId}`;
+    const data = orderedEnrollments.map((enrollment) => {
+      const key = `${enrollment.participantId}:${enrollment.eventId}`;
 
-        const order =
-          latestOrderByPair.get(key) ?? null;
+      const order = latestOrderByPair.get(key) ?? null;
 
-        const operationalOrder =
-          operationalOrderByPair.get(key) ??
-          null;
+      const operationalOrder = operationalOrderByPair.get(key) ?? null;
 
-        const payment =
-          order?.payments[0] ??
-          operationalOrder?.payments[0] ??
-          null;
+      const payment =
+        order?.payments[0] ?? operationalOrder?.payments[0] ?? null;
 
-        const ticket =
-          operationalOrder?.tickets.find(
-            (item) =>
-              item.eventId ===
-                enrollment.eventId &&
-              item.participantId ===
-                enrollment.participantId,
-          ) ?? null;
+      const ticket =
+        operationalOrder?.tickets.find(
+          (item) =>
+            item.eventId === enrollment.eventId &&
+            item.participantId === enrollment.participantId,
+        ) ?? null;
 
-        const checkIn =
-          ticket?.checkIns[0] ?? null;
+      const checkIn = ticket?.checkIns[0] ?? null;
 
-        return {
-          id: enrollment.participantId,
+      return {
+        id: enrollment.participantId,
+        participantEventId: enrollment.id,
 
-          fullName:
-            enrollment.participant.fullName,
+        fullName: enrollment.participant.fullName,
 
-          email:
-            enrollment.participant.email,
+        email: enrollment.participant.email,
 
-          phone:
-            enrollment.participant.phone,
+        phone: enrollment.participant.phone,
 
-          event: {
-            id: enrollment.event.id,
-            title: enrollment.event.title,
-          },
+        event: {
+          id: enrollment.event.id,
+          title: enrollment.event.title,
+        },
 
-          registration: {
-            registeredAt:
-              enrollment.registeredAt,
+        registration: {
+          registeredAt: enrollment.registeredAt,
 
-            approvalStatus:
-              enrollment.approvalStatus,
-          },
+          approvalStatus: enrollment.approvalStatus,
+        },
 
-          order: order
-            ? {
-                id: order.id,
-                orderNumber:
-                  order.orderNumber,
-                status: order.status,
-                approvalStatus:
-                  order.approvalStatus,
-              }
-            : null,
+        order: order
+          ? {
+              id: order.id,
+              orderNumber: order.orderNumber,
+              status: order.status,
+              approvalStatus: order.approvalStatus,
+            }
+          : null,
 
-          payment: payment
-            ? {
-                status: payment.status,
-                amount: payment.amount,
-                paidAt: payment.paidAt,
-              }
-            : null,
+        payment: payment
+          ? {
+              status: payment.status,
+              amount: payment.amount,
+              paidAt: payment.paidAt,
+            }
+          : null,
 
-          ticket: ticket
-            ? {
-                id: ticket.id,
-                ticketNumber:
-                  ticket.ticketNumber,
-                qrCode: ticket.qrCode,
-                categoryId:
-                  ticket.categoryId,
-                categoryName:
-                  ticket.category.name,
-                status: ticket.status,
-              }
-            : null,
+        ticket: ticket
+          ? {
+              id: ticket.id,
+              ticketNumber: ticket.ticketNumber,
+              qrCode: ticket.qrCode,
+              categoryId: ticket.categoryId,
+              categoryName: ticket.category.name,
+              status: ticket.status,
+            }
+          : null,
 
-          checkIn: checkIn
-            ? {
-                status: checkIn.status,
-                checkedInAt:
-                  checkIn.checkedInAt,
-                gate: checkIn.gate,
-              }
-            : null,
+        checkIn: checkIn
+          ? {
+              status: checkIn.status,
+              checkedInAt: checkIn.checkedInAt,
+              gate: checkIn.gate,
+            }
+          : null,
 
-          racepackClaimed:
-            operationalOrder?.isClaimed ??
-            order?.isClaimed ??
-            false,
-        };
-      },
-    );
+        racepackClaimed:
+          operationalOrder?.isClaimed ?? order?.isClaimed ?? false,
+      };
+    });
 
     return NextResponse.json({
       success: true,
       data,
+      summary,
       pagination: {
         page,
         pageSize,
@@ -781,10 +748,7 @@ export async function GET(request: Request) {
       },
     });
   } catch (error: unknown) {
-    console.error(
-      "GET /api/participants error:",
-      error,
-    );
+    console.error("GET /api/participants error:", error);
 
     return authorizationErrorResponse(error);
   }
