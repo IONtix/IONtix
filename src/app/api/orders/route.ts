@@ -196,6 +196,8 @@ export async function GET(
           cancelled: 0,
           refunded: 0,
           partiallyRefunded: 0,
+          ticketIssued: 0,
+          racepackClaimed: 0,
           totalAmount: 0,
           paidAmount: 0,
         },
@@ -462,6 +464,13 @@ export async function GET(
         select: {
           status: true,
           totalPrice: true,
+          isClaimed: true,
+          tickets: {
+            select: {
+              id: true,
+            },
+            take: 1,
+          },
         },
       });
 
@@ -471,6 +480,14 @@ export async function GET(
           result.total += 1;
           result.totalAmount +=
             order.totalPrice;
+
+          if (order.tickets.length > 0) {
+            result.ticketIssued += 1;
+          }
+
+          if (order.isClaimed) {
+            result.racepackClaimed += 1;
+          }
 
           switch (order.status) {
             case "PAID":
@@ -523,6 +540,8 @@ export async function GET(
           cancelled: 0,
           refunded: 0,
           partiallyRefunded: 0,
+          ticketIssued: 0,
+          racepackClaimed: 0,
           totalAmount: 0,
           paidAmount: 0,
         },
