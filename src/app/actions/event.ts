@@ -13,6 +13,7 @@ import {
   requireEventPermission,
   requireOrganizationMembership,
   requireOrganizationPermission,
+  requireResolvedOrganizationPermission,
 } from "@/lib/auth/organization";
 
 type EventCategoryInput = {
@@ -39,6 +40,10 @@ type EventAddonInput = {
 type EventSubmissionMode = "DRAFT" | "SUBMIT_REVIEW";
 
 type EventPayload = {
+  id?: string;
+  organizationId?: string | null;
+  sportId?: string | null;
+
   title?: string;
   category?: string | null;
   description?: string;
@@ -207,12 +212,34 @@ export async function createEvent(
   try {
 
     const user = await requireAuth();
-    const membership = await requireOrganizationMembership();
 
-    await requireOrganizationPermission(
-      membership.organizationId,
-      "events.manage",
-    );
+    if (
+      user.role === "SUPER_ADMIN" &&
+      !payload.organizationId
+    ) {
+      return {
+        success: false,
+        error:
+          "Organisasi wajib dipilih untuk membuat event.",
+      };
+    }
+
+    const membership =
+      payload.organizationId
+        ? await requireResolvedOrganizationPermission(
+            payload.organizationId,
+            "events.manage",
+          )
+        : await requireOrganizationMembership();
+
+    if (
+      !payload.organizationId
+    ) {
+      await requireOrganizationPermission(
+        membership.organizationId,
+        "events.manage",
+      );
+    }
 
     const title = payload.title?.trim() || "";
 
@@ -260,11 +287,10 @@ export async function createEvent(
     const formattedCategories = formatCategories(payload.categories);
     const formattedAddons = formatAddons(payload.addons);
 
-    const isSuperAdmin = user.role === "SUPER_ADMIN";
+    const shouldPublish = false;
 
-    const shouldPublish = isSuperAdmin;
     const shouldSubmitForReview =
-      !isSuperAdmin && submissionMode === "SUBMIT_REVIEW";
+      submissionMode === "SUBMIT_REVIEW";
 
     const newEvent = await prisma.event.create({
       data: {
