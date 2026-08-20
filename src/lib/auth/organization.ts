@@ -221,6 +221,53 @@ async function getPlatformOrganizationMembership(
  * Memastikan user memiliki membership sekaligus permission
  * pada organization tertentu.
  */
+export async function requireResolvedOrganizationPermission(
+  organizationId: string | undefined,
+  permission: string,
+): Promise<OrganizationMembership> {
+  const normalizedPermission = permission.trim();
+
+  if (!normalizedPermission) {
+    throw new AuthorizationError(
+      "Permission organisasi tidak valid.",
+      500,
+    );
+  }
+
+  const user = await requireAuth();
+
+  if (user.role === "SUPER_ADMIN") {
+    if (!organizationId) {
+      throw new AuthorizationError(
+        "Organization context diperlukan.",
+        409,
+      );
+    }
+
+    return getPlatformOrganizationMembership(
+      organizationId,
+      user.id,
+    );
+  }
+
+  const membership =
+    await requireOrganizationMembership(
+      organizationId,
+    );
+
+  if (!membershipHasPermission(
+    membership,
+    normalizedPermission,
+  )) {
+    throw new AuthorizationError(
+      `Akses organisasi ditolak. Permission "${normalizedPermission}" diperlukan.`,
+      403,
+    );
+  }
+
+  return membership;
+}
+
 export async function requireOrganizationPermission(
   organizationId: string,
   permission: string,
