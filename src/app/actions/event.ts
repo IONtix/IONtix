@@ -4,6 +4,9 @@ import { revalidatePath } from "next/cache";
 import bcrypt from "bcryptjs";
 
 import prisma from "@/lib/prisma";
+import type {
+  CreateEventInput,
+} from "@/lib/platform-types";
 import { Prisma } from "@/generated/prisma/client";
 import type { DashboardEvent } from "@/lib/platform-types";
 
@@ -35,6 +38,31 @@ type EventAddonInput = {
   quota?: string | number | null;
   description?: string | null;
   imageUrl?: string | null;
+};
+
+type NormalizableEventAddonInput = {
+  type?: string;
+  name?: string;
+  price?: string | number;
+  capacity?: string | number | null;
+  quota?: string | number | null;
+  description?: string | null;
+  imageUrl?: string | null;
+};
+
+const normalizeAddonType = (
+  value: string | undefined,
+): "MERCHANDISE" | "CARBO_LOADING" | "SHUTTLE" | "HOTEL" => {
+  switch (value) {
+    case "CARBO_LOADING":
+    case "SHUTTLE":
+    case "HOTEL":
+    case "MERCHANDISE":
+      return value;
+
+    default:
+      return "MERCHANDISE";
+  }
 };
 
 type EventSubmissionMode = "DRAFT" | "SUBMIT_REVIEW";
@@ -146,7 +174,9 @@ const toNullableJsonUpdateValue = (
   return toJsonValue(value);
 };
 
-const getDetectedImageUrl = (payload: EventPayload): string | null => {
+const getDetectedImageUrl = (
+  payload: CreateEventInput | EventPayload,
+): string | null => {
   return (
     payload.imageUrl ||
     payload.bannerUrl ||
@@ -176,12 +206,18 @@ const formatCategories = (categories: EventCategoryInput[] | undefined) => {
   }));
 };
 
-const formatAddons = (addons: EventAddonInput[] | undefined) => {
+const formatAddons = (
+  addons:
+    | NormalizableEventAddonInput[]
+    | undefined,
+) => {
   return (addons ?? []).map((addon) => {
     const capacitySource = addon.capacity ?? addon.quota;
 
     return {
-      type: addon.type || "MERCHANDISE",
+      type: normalizeAddonType(
+        addon.type,
+      ),
       name: addon.name?.trim() || "Addon Tanpa Nama",
       price: toNumber(addon.price),
       capacity:
@@ -206,7 +242,7 @@ const formatAddons = (addons: EventAddonInput[] | undefined) => {
  * EO tidak boleh bypass workflow review.
  */
 export async function createEvent(
-  payload: EventPayload,
+  payload: CreateEventInput,
   submissionMode: EventSubmissionMode,
 ): Promise<EventActionResult> {
   try {

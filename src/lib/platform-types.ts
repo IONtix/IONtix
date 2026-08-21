@@ -370,6 +370,74 @@ export interface EventFormInitialData {
 }
 
 /* -------------------------------------------------------------------------- */
+/* CANONICAL CREATE EVENT INPUT                                              */
+/* -------------------------------------------------------------------------- */
+
+export interface CreateEventInput {
+  id?: string;
+
+  organizationId?: string | null;
+  sportId?: string | null;
+
+  title: string;
+  category?: string;
+
+  date: string;
+  endDate?: string | null;
+
+  locationName?: string;
+  location?: string;
+
+  mapsUrl?: string;
+
+  description?: string;
+  rules?: string;
+
+  contactName?: string;
+  contactPhone?: string;
+
+  imageUrl?: string | null;
+  logoUrl?: string | null;
+  posterUrl?: string | null;
+
+  /*
+   * Legacy image aliases.
+   * Dipertahankan sementara agar builder lama
+   * tetap kompatibel selama masa transisi.
+   */
+  bannerUrl?: string | null;
+  coverUrl?: string | null;
+  image?: string | null;
+  banner?: string | null;
+  poster?: string | null;
+  cover?: string | null;
+
+  categories?: Array<{
+    id?: string | number;
+    name?: string;
+    price?: string | number;
+    capacity?: string | number;
+    quota?: string | number;
+    elevation?: string | null;
+    cot?: string | null;
+    description?: string | null;
+    requireApproval?: boolean | string;
+  }>;
+
+  customFields?: unknown;
+
+  addons?: Array<{
+    type?: string;
+    name?: string;
+    price?: string | number;
+    capacity?: string | number | null;
+    quota?: string | number | null;
+    description?: string | null;
+    imageUrl?: string | null;
+  }>;
+}
+
+/* -------------------------------------------------------------------------- */
 /* EVENT PAYLOAD                                                             */
 /* -------------------------------------------------------------------------- */
 
