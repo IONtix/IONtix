@@ -18,6 +18,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import type { SuperAdminRole } from "@/lib/platform-types";
+import { isManagedRole } from "@/lib/admin/role-policy";
 
 interface AddUserModalProps {
   roles: SuperAdminRole[];
@@ -47,13 +48,18 @@ export default function AddUserModal({
 }: AddUserModalProps) {
   const router = useRouter();
 
+  const managedRoles = useMemo(
+    () => roles.filter((role) => isManagedRole(role.name)),
+    [roles],
+  );
+
   const defaultRole = useMemo(() => {
     return (
-      roles.find((role) => role.name === "PESERTA")?.name ??
-      roles[0]?.name ??
-      "PESERTA"
+      managedRoles.find((role) => role.name === "PARTICIPANT")?.name ??
+      managedRoles[0]?.name ??
+      "PARTICIPANT"
     );
-  }, [roles]);
+  }, [managedRoles]);
 
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);

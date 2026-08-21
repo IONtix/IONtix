@@ -15,6 +15,7 @@ import prisma from "@/lib/prisma";
 import { requirePermission } from "@/lib/auth/authorization";
 import { UserStatus } from "@/generated/prisma/client";
 import type { SuperAdminRole, SuperAdminUser } from "@/lib/platform-types";
+import { isManagedRole, ROLE_NAMES } from "@/lib/admin/role-policy";
 
 import AddUserModal from "./_components/AddUserModal";
 import UserActionMenu from "./_components/UserActionMenu";
@@ -83,10 +84,24 @@ function getRoleBadge(roleName: string) {
     };
   }
 
-  if (roleName === "EO") {
+  if (roleName === "EVENT_ORGANIZER") {
     return {
       className: "bg-orange-50 text-orange-700 border-orange-200",
       icon: Building2,
+    };
+  }
+
+  if (roleName === "STAFF") {
+    return {
+      className: "bg-blue-50 text-blue-700 border-blue-200",
+      icon: Users,
+    };
+  }
+
+  if (roleName === "PARTICIPANT") {
+    return {
+      className: "bg-slate-100 text-slate-700 border-slate-200",
+      icon: User,
     };
   }
 
@@ -129,7 +144,10 @@ export default async function UsersManagementPage({
   const params = (await searchParams) ?? {};
 
   const query = getStringParam(params.q).trim();
-  const roleFilter = getStringParam(params.role).trim();
+  const requestedRoleFilter = getStringParam(params.role).trim().toUpperCase();
+  const roleFilter = isManagedRole(requestedRoleFilter)
+    ? requestedRoleFilter
+    : "";
   const statusFilter = getStringParam(params.status).trim().toUpperCase();
 
   const requestedPage = Number(getStringParam(params.page) || "1");
@@ -197,7 +215,7 @@ export default async function UsersManagementPage({
     activeUsers,
     suspendedUsers,
     superAdminUsers,
-    eoUsers,
+    eventOrganizerUsers,
     totalFilteredUsers,
     users,
     availableRoles,
@@ -235,7 +253,7 @@ export default async function UsersManagementPage({
       where: {
         isDeleted: false,
         role: {
-          name: "EO",
+          name: "EVENT_ORGANIZER",
         },
       },
     }),
@@ -272,6 +290,11 @@ export default async function UsersManagementPage({
     }),
 
     prisma.role.findMany({
+      where: {
+        name: {
+          in: Object.values(ROLE_NAMES),
+        },
+      },
       orderBy: [
         {
           isSystem: "desc",
@@ -375,7 +398,7 @@ export default async function UsersManagementPage({
         <div className="rounded-2xl border border-orange-200 bg-white p-5 shadow-sm">
           <p className="text-sm font-medium text-slate-500">EO</p>
           <p className="mt-2 text-2xl font-bold text-slate-900">
-            {eoUsers.toLocaleString("id-ID")}
+            {eventOrganizerUsers.toLocaleString("id-ID")}
           </p>
         </div>
       </div>
@@ -493,7 +516,10 @@ export default async function UsersManagementPage({
                 </tr>
               ) : (
                 normalizedUsers.map((user) => {
-                  const roleName = user.role?.name ?? "PESERTA";
+                  const roleName =
+                    user.role?.name && isManagedRole(user.role.name)
+                      ? user.role.name
+                      : "PARTICIPANT";
 
                   const badge = getRoleBadge(roleName);
 

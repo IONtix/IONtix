@@ -15,6 +15,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import type { SuperAdminRole, SuperAdminUser } from "@/lib/platform-types";
+import { isManagedRole } from "@/lib/admin/role-policy";
 
 interface UserActionMenuProps {
   user: SuperAdminUser;
@@ -82,11 +83,15 @@ export default function UserActionMenu({
 
   const [feedback, setFeedback] = useState("");
 
+  const managedRoles = roles.filter((role) => isManagedRole(role.name));
+
   const defaultRole =
-    user.role?.name ??
-    roles.find((role) => role.name === "PESERTA")?.name ??
-    roles[0]?.name ??
-    "PESERTA";
+    (user.role?.name && isManagedRole(user.role.name)
+      ? user.role.name
+      : undefined) ??
+    managedRoles.find((role) => role.name === "PARTICIPANT")?.name ??
+    managedRoles[0]?.name ??
+    "PARTICIPANT";
 
   const [editData, setEditData] = useState({
     name: user.name ?? "",
@@ -125,10 +130,12 @@ export default function UserActionMenu({
     setEditData({
       name: user.name ?? "",
       role:
-        user.role?.name ??
-        roles.find((role) => role.name === "PESERTA")?.name ??
-        roles[0]?.name ??
-        "PESERTA",
+        (user.role?.name && isManagedRole(user.role.name)
+          ? user.role.name
+          : undefined) ??
+        managedRoles.find((role) => role.name === "PARTICIPANT")?.name ??
+        managedRoles[0]?.name ??
+        "PARTICIPANT",
     });
 
     setFeedback("");
