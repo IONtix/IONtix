@@ -7,13 +7,19 @@
  * Database tetap menjadi source of truth untuk role/permission aktual.
  * Policy ini digunakan sebagai kontrak konfigurasi sebelum baseline
  * tersebut diterapkan melalui seed atau Role Manager.
+ *
+ * Canonical system roles:
+ * - SUPER_ADMIN
+ * - EVENT_ORGANIZER
+ * - STAFF
+ * - PARTICIPANT
  */
 
 export const ROLE_NAMES = {
   SUPER_ADMIN: "SUPER_ADMIN",
-  EO: "EO",
-  PESERTA: "PESERTA",
-  SUPPORT_ADMIN: "SUPPORT_ADMIN",
+  EVENT_ORGANIZER: "EVENT_ORGANIZER",
+  STAFF: "STAFF",
+  PARTICIPANT: "PARTICIPANT",
 } as const;
 
 export type ManagedRoleName = (typeof ROLE_NAMES)[keyof typeof ROLE_NAMES];
@@ -26,6 +32,7 @@ export const SUPER_ADMIN_PERMISSIONS = [
 
   "roles.manage",
 
+  // Legacy permission names retained temporarily for compatibility.
   "eo.view",
   "eo.manage",
 
@@ -58,7 +65,7 @@ export const SUPER_ADMIN_PERMISSIONS = [
   "system.manage",
 ] as const;
 
-export const EO_PERMISSIONS = [
+export const EVENT_ORGANIZER_PERMISSIONS = [
   "events.view",
   "events.manage",
 
@@ -80,17 +87,14 @@ export const EO_PERMISSIONS = [
   "sports.manage",
 ] as const;
 
-export const PESERTA_PERMISSIONS = [
-  "events.view",
-
-  "participants.view",
-
-  "orders.view",
-
-  "tickets.view",
-] as const;
-
-export const SUPPORT_ADMIN_PERMISSIONS = [
+/**
+ * Staff adalah role operasional event.
+ *
+ * Untuk tahap awal kita mempertahankan permission Support Admin
+ * yang sudah ada sebagai baseline operasional. Scope akan diperketat
+ * kemudian berdasarkan kebutuhan nyata staff event.
+ */
+export const STAFF_PERMISSIONS = [
   "users.view",
   "users.manage",
 
@@ -109,14 +113,24 @@ export const SUPPORT_ADMIN_PERMISSIONS = [
   "audit.view",
 ] as const;
 
+export const PARTICIPANT_PERMISSIONS = [
+  "events.view",
+
+  "participants.view",
+
+  "orders.view",
+
+  "tickets.view",
+] as const;
+
 export const ROLE_POLICY = {
   [ROLE_NAMES.SUPER_ADMIN]: SUPER_ADMIN_PERMISSIONS,
 
-  [ROLE_NAMES.EO]: EO_PERMISSIONS,
+  [ROLE_NAMES.EVENT_ORGANIZER]: EVENT_ORGANIZER_PERMISSIONS,
 
-  [ROLE_NAMES.PESERTA]: PESERTA_PERMISSIONS,
+  [ROLE_NAMES.STAFF]: STAFF_PERMISSIONS,
 
-  [ROLE_NAMES.SUPPORT_ADMIN]: SUPPORT_ADMIN_PERMISSIONS,
+  [ROLE_NAMES.PARTICIPANT]: PARTICIPANT_PERMISSIONS,
 } as const;
 
 export type RolePolicyPermission =
@@ -135,10 +149,13 @@ export function isManagedRole(roleName: string): roleName is ManagedRoleName {
 }
 
 export function isSystemRole(roleName: string): boolean {
+  const normalized = roleName.trim().toUpperCase();
+
   return (
-    roleName === ROLE_NAMES.SUPER_ADMIN ||
-    roleName === ROLE_NAMES.EO ||
-    roleName === ROLE_NAMES.PESERTA
+    normalized === ROLE_NAMES.SUPER_ADMIN ||
+    normalized === ROLE_NAMES.EVENT_ORGANIZER ||
+    normalized === ROLE_NAMES.STAFF ||
+    normalized === ROLE_NAMES.PARTICIPANT
   );
 }
 

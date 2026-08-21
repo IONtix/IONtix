@@ -190,12 +190,16 @@ async function seedRoles() {
     ROLE_NAMES.SUPER_ADMIN,
   );
 
-  const eoPermissionIds = resolvePolicyPermissionIds(ROLE_NAMES.EO);
+  const eventOrganizerPermissionIds = resolvePolicyPermissionIds(
+    ROLE_NAMES.EVENT_ORGANIZER,
+  );
 
-  const pesertaPermissionIds = resolvePolicyPermissionIds(ROLE_NAMES.PESERTA);
+  const participantPermissionIds = resolvePolicyPermissionIds(
+    ROLE_NAMES.PARTICIPANT,
+  );
 
-  const supportAdminPermissionIds = resolvePolicyPermissionIds(
-    ROLE_NAMES.SUPPORT_ADMIN,
+  const staffPermissionIds = resolvePolicyPermissionIds(
+    ROLE_NAMES.STAFF,
   );
 
   const superAdminRole = await prisma.role.upsert({
@@ -219,77 +223,80 @@ async function seedRoles() {
     },
   });
 
-  const eoRole = await prisma.role.upsert({
+  const eventOrganizerRole = await prisma.role.upsert({
     where: {
-      name: ROLE_NAMES.EO,
+      name: ROLE_NAMES.EVENT_ORGANIZER,
     },
     update: {
       description: "Event organizer",
       isSystem: true,
       permissions: {
-        set: eoPermissionIds,
+        set: eventOrganizerPermissionIds,
       },
     },
     create: {
-      name: ROLE_NAMES.EO,
+      name: ROLE_NAMES.EVENT_ORGANIZER,
       description: "Event organizer",
       isSystem: true,
       permissions: {
-        connect: eoPermissionIds,
+        connect: eventOrganizerPermissionIds,
       },
     },
   });
 
-  const pesertaRole = await prisma.role.upsert({
+  const participantRole = await prisma.role.upsert({
     where: {
-      name: ROLE_NAMES.PESERTA,
+      name: ROLE_NAMES.PARTICIPANT,
     },
     update: {
       description: "Participant / ticket buyer",
       isSystem: true,
       permissions: {
-        set: pesertaPermissionIds,
+        set: participantPermissionIds,
       },
     },
     create: {
-      name: ROLE_NAMES.PESERTA,
+      name: ROLE_NAMES.PARTICIPANT,
       description: "Participant / ticket buyer",
       isSystem: true,
       permissions: {
-        connect: pesertaPermissionIds,
+        connect: participantPermissionIds,
       },
     },
   });
 
   await prisma.role.upsert({
     where: {
-      name: ROLE_NAMES.SUPPORT_ADMIN,
+      name: ROLE_NAMES.STAFF,
     },
     update: {
-      description: "Support and controlled administrative access",
-      isSystem: false,
+      description: "Event operational staff",
+      isSystem: true,
       permissions: {
-        set: supportAdminPermissionIds,
+        set: staffPermissionIds,
       },
     },
     create: {
-      name: ROLE_NAMES.SUPPORT_ADMIN,
-      description: "Support and controlled administrative access",
-      isSystem: false,
+      name: ROLE_NAMES.STAFF,
+      description: "Event operational staff",
+      isSystem: true,
       permissions: {
-        connect: supportAdminPermissionIds,
+        connect: staffPermissionIds,
       },
     },
   });
 
   return {
     superAdminRole,
-    eoRole,
-    pesertaRole,
+    eventOrganizerRole,
+    participantRole,
   };
 }
 
-async function seedUsers(superAdminRoleId: string, eoRoleId: string) {
+async function seedUsers(
+  superAdminRoleId: string,
+  eventOrganizerRoleId: string,
+) {
   const adminPassword =
     process.env.IONTIX_SEED_ADMIN_PASSWORD ?? "CHANGE-ME-IMMEDIATELY";
 
@@ -316,35 +323,39 @@ async function seedUsers(superAdminRoleId: string, eoRoleId: string) {
     },
   });
 
-  const eoPassword =
+  const eventOrganizerPassword =
     process.env.IONTIX_SEED_EO_PASSWORD ?? "CHANGE-ME-IMMEDIATELY";
 
-  const eoEmail = process.env.IONTIX_SEED_EO_EMAIL ?? "eo.demo@iontix.com";
+  const eventOrganizerEmail =
+    process.env.IONTIX_SEED_EO_EMAIL ?? "eo.demo@iontix.com";
 
-  const hashedEoPassword = await bcrypt.hash(eoPassword, 12);
+  const hashedEventOrganizerPassword = await bcrypt.hash(
+    eventOrganizerPassword,
+    12,
+  );
 
-  const eoUser = await prisma.user.upsert({
+  const eventOrganizerUser = await prisma.user.upsert({
     where: {
-      email: eoEmail,
+      email: eventOrganizerEmail,
     },
     update: {
-      roleId: eoRoleId,
-      password: hashedEoPassword,
+      roleId: eventOrganizerRoleId,
+      password: hashedEventOrganizerPassword,
       status: "ACTIVE",
       isDeleted: false,
     },
     create: {
       name: "IONtix Demo Organizer",
-      email: eoEmail,
-      password: hashedEoPassword,
-      roleId: eoRoleId,
+      email: eventOrganizerEmail,
+      password: hashedEventOrganizerPassword,
+      roleId: eventOrganizerRoleId,
       status: "ACTIVE",
     },
   });
 
   return {
     adminUser,
-    eoUser,
+    eventOrganizerUser,
   };
 }
 
@@ -382,7 +393,10 @@ async function seedSports() {
   return sports;
 }
 
-async function seedDemoOrganization(eoUserId: string, eoRoleId: string) {
+async function seedDemoOrganization(
+  eventOrganizerUserId: string,
+  eventOrganizerRoleId: string,
+) {
   const organization = await prisma.organization.upsert({
     where: {
       slug: "iontix-demo",
@@ -411,19 +425,19 @@ async function seedDemoOrganization(eoUserId: string, eoRoleId: string) {
     where: {
       organizationId_userId: {
         organizationId: organization.id,
-        userId: eoUserId,
+        userId: eventOrganizerUserId,
       },
     },
     update: {
-      roleId: eoRoleId,
+      roleId: eventOrganizerRoleId,
       isOwner: true,
       isActive: true,
       title: "Owner",
     },
     create: {
       organizationId: organization.id,
-      userId: eoUserId,
-      roleId: eoRoleId,
+      userId: eventOrganizerUserId,
+      roleId: eventOrganizerRoleId,
       isOwner: true,
       isActive: true,
       title: "Owner",
@@ -433,7 +447,7 @@ async function seedDemoOrganization(eoUserId: string, eoRoleId: string) {
   return organization;
 }
 
-async function seedDemoEvent(organizationId: string, eoUserId: string) {
+async function seedDemoEvent(organizationId: string, eventOrganizerUserId: string) {
   const running = await prisma.sport.findUnique({
     where: {
       slug: "running",
@@ -454,7 +468,7 @@ async function seedDemoEvent(organizationId: string, eoUserId: string) {
     },
     update: {
       organizationId,
-      eoId: eoUserId,
+      eoId: eventOrganizerUserId,
       sportId: running.id,
       title: "IONtix Demo Run 2026",
       description:
@@ -470,7 +484,7 @@ async function seedDemoEvent(organizationId: string, eoUserId: string) {
     },
     create: {
       organizationId,
-      eoId: eoUserId,
+      eoId: eventOrganizerUserId,
       sportId: running.id,
       title: "IONtix Demo Run 2026",
       slug: "iontix-demo-run-2026",
@@ -571,15 +585,18 @@ async function seedDemoAddon(eventId: string) {
 async function main() {
   console.log("🌱 Starting IONtix V2 seed...");
 
-  const { superAdminRole, eoRole } = await seedRoles();
+  const { superAdminRole, eventOrganizerRole } = await seedRoles();
 
-  const { adminUser, eoUser } = await seedUsers(superAdminRole.id, eoRole.id);
+  const { adminUser, eventOrganizerUser } = await seedUsers(
+    superAdminRole.id,
+    eventOrganizerRole.id,
+  );
 
   await seedSports();
 
-  const organization = await seedDemoOrganization(eoUser.id, eoRole.id);
+  const organization = await seedDemoOrganization(eventOrganizerUser.id, eventOrganizerRole.id);
 
-  const demoEvent = await seedDemoEvent(organization.id, eoUser.id);
+  const demoEvent = await seedDemoEvent(organization.id, eventOrganizerUser.id);
 
   const demoCategory = await seedDemoTicketCategory(demoEvent.id);
 
@@ -588,7 +605,7 @@ async function main() {
   console.log("");
   console.log("✅ Seed complete.");
   console.log(`✅ Super Admin: ${adminUser.email}`);
-  console.log(`✅ EO Demo: ${eoUser.email}`);
+  console.log(`✅ Event Organizer Demo: ${eventOrganizerUser.email}`);
   console.log(`✅ Organization: ${organization.name}`);
   console.log(`✅ Event: ${demoEvent.title}`);
   console.log(`✅ Category: ${demoCategory.name} | Rp ${demoCategory.price}`);
