@@ -1,4 +1,4 @@
-import { CheckCircle2, KeyRound, ShieldCheck, Users } from "lucide-react";
+import { CheckCircle2, KeyRound, ShieldCheck } from "lucide-react";
 import { redirect } from "next/navigation";
 
 import {
@@ -7,11 +7,9 @@ import {
 } from "@/lib/auth/authorization";
 
 import { listPermissions, listRoles } from "@/lib/admin/roles";
+import { ROLE_NAMES } from "@/lib/admin/role-policy";
 
 import PermissionMatrix from "./_components/PermissionMatrix";
-import RoleCloneDialog from "./_components/RoleCloneDialog";
-import RoleDeleteDialog from "./_components/RoleDeleteDialog";
-import RoleEditor from "./_components/RoleEditor";
 
 function formatDate(value: Date) {
   return value.toLocaleDateString("id-ID", {
@@ -19,16 +17,6 @@ function formatDate(value: Date) {
     month: "long",
     year: "numeric",
   });
-}
-
-function getRoleTypeLabel(isSystem: boolean) {
-  return isSystem ? "System Role" : "Custom Role";
-}
-
-function getRoleBadgeClass(isSystem: boolean) {
-  return isSystem
-    ? "border-blue-200 bg-blue-50 text-blue-700"
-    : "border-violet-200 bg-violet-50 text-violet-700";
 }
 
 function groupPermissions(
@@ -82,9 +70,11 @@ export default async function RolesManagementPage() {
     listPermissions(),
   ]);
 
-  const systemRoles = roles.filter((role) => role.isSystem);
+  const canonicalRoleNames = new Set<string>(Object.values(ROLE_NAMES));
 
-  const customRoles = roles.filter((role) => !role.isSystem);
+  const systemRoles = roles.filter(
+    (role) => canonicalRoleNames.has(role.name),
+  );
 
   const permissionGroups = groupPermissions(permissions);
 
@@ -109,7 +99,9 @@ export default async function RolesManagementPage() {
         </div>
 
         <div className="shrink-0">
-          <RoleEditor />
+          <span className="inline-flex items-center rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600">
+            4 System Roles
+          </span>
         </div>
       </div>
 
@@ -125,7 +117,7 @@ export default async function RolesManagementPage() {
               <p className="text-sm font-medium text-slate-500">Total Role</p>
 
               <p className="mt-1 text-2xl font-bold text-slate-900">
-                {roles.length}
+                {systemRoles.length}
               </p>
             </div>
           </div>
@@ -147,21 +139,7 @@ export default async function RolesManagementPage() {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-violet-200 bg-violet-50/50 p-5 shadow-sm">
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white text-violet-600">
-              <Users className="h-5 w-5" />
-            </div>
 
-            <div>
-              <p className="text-sm font-medium text-violet-700">Custom Role</p>
-
-              <p className="mt-1 text-2xl font-bold text-violet-900">
-                {customRoles.length}
-              </p>
-            </div>
-          </div>
-        </div>
 
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50/50 p-5 shadow-sm">
           <div className="flex items-center gap-3">
@@ -189,7 +167,7 @@ export default async function RolesManagementPage() {
             <h2 className="font-bold text-slate-900">Daftar Role</h2>
 
             <p className="text-xs text-slate-500">
-              {roles.length} role terdaftar di platform.
+              {systemRoles.length} system role terdaftar di platform.
             </p>
           </div>
         </div>
@@ -225,7 +203,7 @@ export default async function RolesManagementPage() {
             </thead>
 
             <tbody className="divide-y divide-slate-100">
-              {roles.length === 0 ? (
+              {systemRoles.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="px-6 py-12 text-center">
                     <div className="mx-auto max-w-sm">
@@ -240,7 +218,7 @@ export default async function RolesManagementPage() {
                   </td>
                 </tr>
               ) : (
-                roles.map((role) => (
+                systemRoles.map((role) => (
                   <tr
                     key={role.id}
                     className="transition-colors hover:bg-slate-50/70"
@@ -259,11 +237,9 @@ export default async function RolesManagementPage() {
 
                     <td className="px-6 py-4">
                       <span
-                        className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-bold ${getRoleBadgeClass(
-                          role.isSystem,
-                        )}`}
+                        className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-bold ${"border-blue-200 bg-blue-50 text-blue-700"}`}
                       >
-                        {getRoleTypeLabel(role.isSystem)}
+                        System Role
                       </span>
                     </td>
 
@@ -292,35 +268,9 @@ export default async function RolesManagementPage() {
                     <td className="px-6 py-4 text-right">
                       {!role.isSystem ? (
                         <div className="flex justify-end gap-2">
-                          <RoleEditor
-                            role={{
-                              id: role.id,
-                              name: role.name,
-                              description: role.description,
-                              isSystem: role.isSystem,
-                            }}
-                          />
-
-                          <RoleCloneDialog
-                            role={{
-                              id: role.id,
-                              name: role.name,
-                              description: role.description,
-                              isSystem: role.isSystem,
-                            }}
-                          />
-
-                          <RoleDeleteDialog
-                            role={{
-                              id: role.id,
-                              name: role.name,
-                              description: role.description,
-                              isSystem: role.isSystem,
-                              userCount: role.userCount,
-                              organizationMemberCount:
-                                role.organizationMemberCount,
-                            }}
-                          />
+                          <span className="text-xs font-medium text-slate-400">
+                            Read Only
+                          </span>
                         </div>
                       ) : (
                         <span className="text-xs font-medium text-slate-400">
