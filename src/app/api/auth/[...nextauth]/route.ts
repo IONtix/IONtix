@@ -35,11 +35,15 @@ export const authOptions: NextAuthOptions = {
           return null;
         }
 
+        if (!user.role?.name) {
+          return null;
+        }
+
         return {
           id: user.id,
           name: user.name,
           email: user.email,
-          role: user.role?.name || "PESERTA",
+          role: user.role.name,
         };
       },
     }),
@@ -56,7 +60,10 @@ export const authOptions: NextAuthOptions = {
     async session({ session, token }) {
       if (session?.user) {
         session.user.id = typeof token.id === "string" ? token.id : "";
-        session.user.role = typeof token.role === "string" ? token.role : "PESERTA";
+        session.user.role =
+          typeof token.role === "string" && token.role.trim()
+            ? token.role
+            : "";
       }
       return session;
     },

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma"; // Sesuaikan jika lokasi file prisma Anda berbeda (misal: @/lib/db)
 import bcrypt from "bcryptjs";
+import { ROLE_NAMES } from "@/lib/admin/role-policy";
 
 export async function POST(req: Request) {
   try {
@@ -39,12 +40,12 @@ export async function POST(req: Request) {
         email,
         phone,
         password: hashedPassword,
-        role: { connect: { name: "EO" } },
+        role: { connect: { name: ROLE_NAMES.PARTICIPANT } },
       },
     });
 
     return NextResponse.json(
-      { message: "Registrasi EO berhasil!", userId: newUser.id },
+      { message: "Registrasi peserta berhasil!", userId: newUser.id },
       { status: 201 },
     );
   } catch (error: unknown) {
