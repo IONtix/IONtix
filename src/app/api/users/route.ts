@@ -8,6 +8,7 @@ import {
 } from "@/lib/auth/authorization";
 
 import { UserStatus } from "@/generated/prisma/client";
+import { isManagedRole } from "@/lib/admin/role-policy";
 
 const CREATEABLE_STATUSES = new Set<UserStatus>([
   UserStatus.ACTIVE,
@@ -31,7 +32,7 @@ export async function POST(req: Request) {
     const roleName =
       typeof body.role === "string"
         ? body.role.trim().toUpperCase()
-        : "PESERTA";
+        : "PARTICIPANT";
 
     const phone = typeof body.phone === "string" ? body.phone.trim() : null;
 
@@ -100,6 +101,16 @@ export async function POST(req: Request) {
      * Role sekarang bersumber dari database.
      * Tidak ada lagi hard-coded ALLOWED_ROLES.
      */
+    if (!isManagedRole(roleName)) {
+      return NextResponse.json(
+        {
+          message:
+            "Role tidak valid. Gunakan SUPER_ADMIN, EVENT_ORGANIZER, STAFF, atau PARTICIPANT.",
+        },
+        { status: 400 },
+      );
+    }
+
     const roleRecord = await prisma.role.findUnique({
       where: {
         name: roleName,

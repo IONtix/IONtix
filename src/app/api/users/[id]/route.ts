@@ -7,6 +7,7 @@ import {
 } from "@/lib/auth/authorization";
 
 import { UserStatus } from "@/generated/prisma/client";
+import { isManagedRole } from "@/lib/admin/role-policy";
 
 interface RouteContext {
   params: Promise<{ id: string }> | { id: string };
@@ -76,6 +77,16 @@ export async function PUT(request: Request, { params }: RouteContext) {
      * sehingga users.manage saja belum cukup.
      */
     if (requestedRole !== undefined) {
+      if (!isManagedRole(requestedRole)) {
+        return NextResponse.json(
+          {
+            message:
+              "Role tidak valid. Gunakan SUPER_ADMIN, EVENT_ORGANIZER, STAFF, atau PARTICIPANT.",
+          },
+          { status: 400 },
+        );
+      }
+
       if (!actor.permissions.includes("roles.manage")) {
         return NextResponse.json(
           {
