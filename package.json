@@ -59,7 +59,8 @@
     "test:payment-test-capability-route": "tsx scripts/test-payment-test-capability-route.ts",
     "test:reset-password-security": "tsx scripts/test-reset-password-security.ts",
     "test:checkout-participant-role": "tsx scripts/test-checkout-participant-role.ts",
-    "test:checkout-concurrency": "tsx scripts/test-checkout-concurrency.ts"
+    "test:checkout-concurrency": "tsx scripts/test-checkout-concurrency.ts",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.9.1",
