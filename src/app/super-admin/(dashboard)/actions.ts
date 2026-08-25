@@ -2,24 +2,56 @@
 
 import prisma from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { requireSuperAdmin } from "@/lib/auth/authorization";
 
 /**
- * Server Action untuk menyetujui (publish) event yang statusnya pending
+ * Server Action untuk menyetujui (publish) event yang statusnya pending.
  */
-export async function approveEvent(eventId: string) {
+export async function approveEvent(
+  eventId: string,
+  formData?: FormData,
+): Promise<void> {
+  // Pertahankan parameter untuk kompatibilitas
+  // dengan pemanggilan Server Action berbasis form.
+  void formData;
+
   try {
-    // 1. Update status isPublished menjadi true di PostgreSQL
-    await prisma.event.update({
+    await requireSuperAdmin();
+
+    const event = await prisma.event.findUnique({
       where: { id: eventId },
-      data: { isPublished: true },
+      select: {
+        id: true,
+        status: true,
+      },
     });
 
-    // 2. Beri tahu Next.js untuk memperbarui data di halaman super-admin secara instan
-    revalidatePath("/super-admin");
+    if (!event) {
+      throw new Error("Event tidak ditemukan.");
+    }
 
-    return { success: true, message: "Event berhasil dipublikasikan!" };
+    if (event.status !== "PENDING_REVIEW") {
+      throw new Error(
+        "Event hanya dapat dipublikasikan ketika berstatus PENDING_REVIEW.",
+      );
+    }
+
+    await prisma.event.update({
+      where: { id: eventId },
+      data: {
+        status: "PUBLISHED",
+        isPublished: true,
+        publishedAt: new Date(),
+      },
+    });
+
+    revalidatePath("/super-admin");
+    revalidatePath("/super-admin/events");
+    revalidatePath("/dashboard/events");
+    revalidatePath(`/dashboard/events/${eventId}`);
+    revalidatePath(`/events/${eventId}`);
   } catch (error) {
     console.error("Gagal menyetujui event:", error);
-    return { success: false, message: "Gagal memperbarui status event." };
+    throw error;
   }
 }

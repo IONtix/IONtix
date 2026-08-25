@@ -52,7 +52,7 @@ function ResetPasswordForm() {
         alert("🎉 Password berhasil diperbarui! Silakan login kembali.");
         router.push("/login");
       }
-    } catch (err) {
+    } catch {
       setLoading(false);
       setError("Terjadi kesalahan koneksi. Silakan coba lagi.");
     }

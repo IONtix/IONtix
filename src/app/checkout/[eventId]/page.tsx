@@ -1,6 +1,8 @@
 import prisma from "@/lib/prisma";
 import { notFound } from "next/navigation";
+
 import CheckoutFormClient from "./CheckoutFormClient";
+import type { CustomFieldDefinition } from "@/lib/platform-types";
 
 interface CheckoutPageProps {
   params: Promise<{ eventId: string }>;
@@ -8,41 +10,89 @@ interface CheckoutPageProps {
 
 async function getEventData(eventId: string) {
   try {
-    const event = await prisma.event.findUnique({
-      where: { id: eventId },
+    const event = await prisma.event.findFirst({
+      where: {
+        id: eventId,
+        status: "PUBLISHED",
+        isPublished: true,
+      },
       include: {
-        categories: true, // Mengambil kategori tiket dari DB
-        addons: true, // <-- BARU: Mengambil katalog Add-ons dari DB
+        categories: {
+          where: {
+            isActive: true,
+            AND: [
+              {
+                OR: [
+                  {
+                    saleStartsAt: null,
+                  },
+                  {
+                    saleStartsAt: {
+                      lte: new Date(),
+                    },
+                  },
+                ],
+              },
+              {
+                OR: [
+                  {
+                    saleEndsAt: null,
+                  },
+                  {
+                    saleEndsAt: {
+                      gte: new Date(),
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+          orderBy: {
+            sortOrder: "asc",
+          },
+        },
+        addons: {
+          where: {
+            isActive: true,
+          },
+          orderBy: {
+            createdAt: "asc",
+          },
+        },
       },
     });
 
     return event;
-  } catch (error) {
-    console.error("Gagal mengambil data event:", error);
+  } catch (error: unknown) {
+    console.error("Gagal mengambil data checkout event:", error);
+
     return null;
   }
 }
 
 export default async function CheckoutPage({ params }: CheckoutPageProps) {
   const { eventId } = await params;
+
   const event = await getEventData(eventId);
 
-  // Jika event tidak ada di database, tampilkan 404
+  /*
+   * Jangan membocorkan apakah event exists
+   * tetapi tidak boleh checkout.
+   */
   if (!event) {
     notFound();
   }
 
-  // Ambil custom fields dari DB jika ada, jika tidak default ke array kosong
   const customFields = Array.isArray(event.customFields)
-    ? (event.customFields as any[])
+    ? (event.customFields as unknown as CustomFieldDefinition[])
     : [];
 
   return (
     <main className="min-h-screen bg-slate-50 py-10">
       <CheckoutFormClient
         event={event}
-        tickets={event.categories || []}
-        addons={event.addons || []} // <-- BARU: Kirim Addons ke Client Form
+        tickets={event.categories}
+        addons={event.addons}
         customFields={customFields}
       />
     </main>

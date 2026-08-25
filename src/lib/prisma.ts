@@ -1,33 +1,89 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient } from "@/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 
-// Fungsi untuk membuat koneksi baru
-const prismaClientSingleton = () => {
+const globalForPrisma = globalThis as unknown as {
+  prisma: PrismaClient | undefined;
+  prismaPool: Pool | undefined;
+};
+
+function createPrismaClient() {
   const connectionString = process.env.DATABASE_URL;
 
   if (!connectionString) {
     throw new Error("DATABASE_URL is not defined in environment variables.");
   }
 
-  const pool = new Pool({ connectionString });
-  const adapter = new PrismaPg(pool);
+  const isProduction =
+    process.env.NODE_ENV === "production";
 
-  return new PrismaClient({ adapter });
-};
+  /*
+   * Pada development/E2E, jangan biarkan parameter SSL
+   * dari DATABASE_URL mengambil alih konfigurasi ssl
+   * pada pg Pool.
+   *
+   * Production tetap menggunakan DATABASE_URL asli.
+   */
+  let poolConnectionString = connectionString;
 
-// Deklarasi global untuk menampung instance Prisma di environment Node.js
-declare global {
-  // eslint-disable-next-line no-var
-  var prismaGlobal: ReturnType<typeof prismaClientSingleton> | undefined;
+  if (!isProduction) {
+    try {
+      const url = new URL(
+        connectionString,
+      );
+
+      url.searchParams.delete("sslmode");
+      url.searchParams.delete("ssl");
+      url.searchParams.delete("sslcert");
+      url.searchParams.delete("sslkey");
+      url.searchParams.delete("sslrootcert");
+
+      poolConnectionString =
+        url.toString();
+    } catch {
+      throw new Error(
+        "DATABASE_URL tidak valid.",
+      );
+    }
+  }
+
+  const pool =
+    globalForPrisma.prismaPool ??
+    new Pool({
+      connectionString:
+        poolConnectionString,
+      max: isProduction ? 10 : 5,
+      connectionTimeoutMillis: 10_000,
+      idleTimeoutMillis: 30_000,
+
+      /*
+       * Development/E2E:
+       * tetap menggunakan TLS, tetapi tidak mewajibkan
+       * certificate chain lokal dipercaya.
+       *
+       * Production:
+       * gunakan default certificate verification.
+       */
+      ssl: isProduction
+        ? undefined
+        : {
+            rejectUnauthorized: false,
+          },
+    });
+
+  if (process.env.NODE_ENV !== "production") {
+    globalForPrisma.prismaPool = pool;
+  }
+
+  return new PrismaClient({
+    adapter: new PrismaPg(pool),
+  });
 }
 
-// Gunakan instance yang sudah ada di global, atau buat baru jika belum ada
-const prisma = globalThis.prismaGlobal ?? prismaClientSingleton();
+const prisma = globalForPrisma.prisma ?? createPrismaClient();
 
-// Simpan ke global saat mode development agar tidak bocor saat Next.js Hot Reload
 if (process.env.NODE_ENV !== "production") {
-  globalThis.prismaGlobal = prisma;
+  globalForPrisma.prisma = prisma;
 }
 
 export default prisma;

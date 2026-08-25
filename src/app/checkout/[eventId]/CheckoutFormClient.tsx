@@ -1,6 +1,14 @@
 "use client";
 
 import { processCheckout } from "@/app/actions/checkout";
+import Image from "next/image";
+import type {
+  CheckoutAddonData,
+  CheckoutEventData,
+  CheckoutPaymentSession,
+  CheckoutTicketData,
+  CustomFieldDefinition,
+} from "@/lib/platform-types";
 import React, { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -11,22 +19,20 @@ import {
   MapPin,
   Calendar,
   Receipt,
-  ShieldCheck,
   ImageIcon,
   Plus,
   Minus,
   ArrowRight,
   ArrowLeft,
   QrCode,
-  Building,
   Package, // <-- Icon baru untuk Addons
 } from "lucide-react";
 
 interface CheckoutFormClientProps {
-  event: any;
-  tickets: any[];
-  addons?: any[]; // <-- BARU: Tambahkan props addons (opsional agar aman)
-  customFields: any[];
+  event: CheckoutEventData;
+  tickets: CheckoutTicketData[];
+  addons?: CheckoutAddonData[];
+  customFields: CustomFieldDefinition[];
 }
 
 // Tipe Data Peserta
@@ -64,6 +70,13 @@ export default function CheckoutFormClient({
 
   // STATE: Pembayaran
   const [paymentMethod, setPaymentMethod] = useState<string>("");
+  const [paymentSessions, setPaymentSessions] = useState<
+    CheckoutPaymentSession[]
+  >([]);
+  const [retryingPaymentOrderId, setRetryingPaymentOrderId] =
+    useState<string | null>(null);
+  const [paymentUxMessage, setPaymentUxMessage] =
+    useState<string | null>(null);
 
   // =========================================================================
   // LOGIKA: KALKULASI HARGA & JUMLAH
@@ -187,6 +200,85 @@ export default function CheckoutFormClient({
   // =========================================================================
   // LOGIKA: VALIDASI & SUBMIT PESANAN
   // =========================================================================
+  const handleRetryPayment = async (
+    orderId: string,
+  ) => {
+    if (!orderId) {
+      return;
+    }
+
+    setRetryingPaymentOrderId(orderId);
+    setPaymentUxMessage(null);
+
+    try {
+      const response = await fetch(
+        `/api/orders/${orderId}/payment/retry`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        },
+      );
+
+      const data = (await response.json()) as {
+        success?: boolean;
+        error?: string;
+        data?: {
+          orderId: string;
+          externalId: string;
+          provider: string;
+          status: string;
+          checkoutUrl: string | null;
+          token: string | null;
+          expiresAt: string | null;
+        };
+      };
+
+      if (
+        !response.ok ||
+        !data.success ||
+        !data.data
+      ) {
+        throw new Error(
+          data.error ??
+            "Sesi pembayaran belum dapat dibuat ulang.",
+        );
+      }
+
+      setPaymentSessions((current) =>
+        current.map((session) =>
+          session.orderId ===
+          data.data!.orderId
+            ? {
+                ...session,
+                externalId:
+                  data.data!.externalId,
+                checkoutUrl:
+                  data.data!.checkoutUrl,
+                status:
+                  data.data!.status,
+                expiresAt:
+                  data.data!.expiresAt,
+              }
+            : session,
+        ),
+      );
+
+      setPaymentUxMessage(
+        "Sesi pembayaran berhasil dibuat ulang.",
+      );
+    } catch (error) {
+      setPaymentUxMessage(
+        error instanceof Error
+          ? error.message
+          : "Gagal membuat ulang sesi pembayaran.",
+      );
+    } finally {
+      setRetryingPaymentOrderId(null);
+    }
+  };
+
   const handleSubmitOrder = async () => {
     if (!paymentMethod) {
       alert("Silakan pilih metode pembayaran terlebih dahulu!");
@@ -196,7 +288,7 @@ export default function CheckoutFormClient({
     setIsSubmitting(true);
     try {
       const formattedAddons = Object.entries(addonCounts)
-        .filter(([_, qty]) => qty > 0)
+        .filter((entry) => entry[1] > 0)
         .map(([addonId, quantity]) => ({ addonId, quantity }));
 
       const payload = {
@@ -208,14 +300,34 @@ export default function CheckoutFormClient({
       };
 
       // Panggil Server Action yang baru dibuat
-      const response: any = await processCheckout(payload as any);
+      const response = await processCheckout(payload);
 
       if (response.success) {
+        setPaymentSessions(
+          response.paymentSessions,
+        );
+        setPaymentUxMessage(null);
+
+        const primaryOrderId =
+          response.paymentSessions[0]?.orderId ??
+          response.orderIds[0];
+
+        if (primaryOrderId) {
+          router.replace(
+            `/checkout/success?orderId=${encodeURIComponent(
+              primaryOrderId,
+            )}&event=${encodeURIComponent(
+              event.title,
+            )}`,
+          );
+          return;
+        }
+
         setCurrentStep(4);
       } else {
         alert(response.error);
       }
-    } catch (error) {
+    } catch {
       alert("Terjadi kesalahan sistem. Silakan coba lagi.");
     } finally {
       setIsSubmitting(false);
@@ -236,8 +348,10 @@ export default function CheckoutFormClient({
       <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden mb-8">
         {event.imageUrl ? (
           <div className="w-full h-40 sm:h-64 relative bg-slate-100">
-            <img
+            <Image
               src={event.imageUrl}
+              width={1600}
+              height={500}
               alt="Poster"
               className="w-full h-full object-cover object-center"
             />
@@ -780,13 +894,91 @@ export default function CheckoutFormClient({
             </div>
           )}
           {currentStep === 4 && (
-            <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm text-center">
-              <h2 className="text-2xl font-black text-slate-900 mb-2">
-                Selesaikan Pembayaran Anda
-              </h2>
-              <p className="text-slate-500 mb-8">
-                Pesanan berhasil dibuat. Segera selesaikan pembayaran.
-              </p>
+            <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm text-center space-y-6">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
+                <CheckCircle2 size={34} />
+              </div>
+
+              <div>
+                <h2 className="text-2xl font-black text-slate-900 mb-2">Pesanan Berhasil Dibuat
+                </h2>
+                <p className="text-slate-500">Pesanan sudah tercatat. Pembayaran belum selesai sampai transaksi Anda berhasil dikonfirmasi.</p>
+              </div>
+
+              {paymentUxMessage && (
+                <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-left">
+                  <p className="text-sm font-semibold text-blue-900">
+                    {paymentUxMessage}
+                  </p>
+                </div>
+              )}
+
+              {paymentSessions.length > 0 ? (
+                <div className="space-y-3 text-left">
+                  {paymentSessions.map((session) => (
+                    <div
+                      key={session.externalId}
+                      className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
+                    >
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                            Status Pembayaran
+                          </p>
+                          <p className="mt-1 font-bold text-slate-900">
+                            {session.status}
+                          </p>
+                          <p className="mt-1 break-all font-mono text-[11px] text-slate-400">
+                            {session.externalId}
+                          </p>
+                        </div>
+
+                        {session.checkoutUrl ? (
+                        <a
+                          href={session.checkoutUrl}
+                          className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white transition-all hover:bg-emerald-700"
+                        >
+                          Lanjutkan Pembayaran
+                          <ArrowRight size={18} />
+                        </a>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleRetryPayment(
+                              session.orderId,
+                            )
+                          }
+                          disabled={
+                            retryingPaymentOrderId ===
+                            session.orderId
+                          }
+                          className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white transition-all hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {retryingPaymentOrderId ===
+                          session.orderId
+                            ? "Menyiapkan Pembayaran..."
+                            : "Coba Lagi"}
+                          <ArrowRight size={18} />
+                        </button>
+                      )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-left">
+                  <p className="font-bold text-amber-900">
+                    Sesi pembayaran belum tersedia
+                  </p>
+                  <p className="mt-1 text-sm leading-6 text-amber-700">
+                    Pesanan sudah berhasil dibuat, tetapi sesi pembayaran
+                    belum tersedia. Silakan cek status pesanan Anda atau
+                    coba kembali beberapa saat lagi.
+                  </p>
+                </div>
+              )}
+
               <button
                 onClick={() => router.push("/dashboard")}
                 className="px-8 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition-all"

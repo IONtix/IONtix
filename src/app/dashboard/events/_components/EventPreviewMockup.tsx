@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import React, { useState } from "react";
 import {
   CalendarDays,
@@ -76,10 +77,12 @@ export default function EventPreviewMockup({ data }: { data: PreviewData }) {
           {/* Header Poster */}
           <div className="h-48 bg-slate-200 flex items-center justify-center relative overflow-hidden">
             {data.posterPreview ? (
-              <img
+              <Image
                 src={data.posterPreview}
                 alt="Cover Event"
-                className="w-full h-full object-cover"
+                fill
+                sizes="(max-width: 768px) 100vw, 420px"
+                className="object-cover"
               />
             ) : (
               <div className="flex flex-col items-center text-slate-400">
@@ -233,10 +236,12 @@ export default function EventPreviewMockup({ data }: { data: PreviewData }) {
                   <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
                     Diselenggarakan Oleh
                   </p>
-                  <img
+                  <Image
                     src={data.logoPreview}
                     alt="Logo Penyelenggara"
-                    className="w-14 h-14 rounded-full border-2 border-slate-100 shadow-sm object-cover bg-white"
+                    width={56}
+                    height={56}
+                    className="h-14 w-14 rounded-full border-2 border-slate-100 bg-white object-cover shadow-sm"
                   />
                 </div>
               )}

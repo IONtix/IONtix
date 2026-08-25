@@ -3,12 +3,13 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
+import type { TicketOrderLookup } from "@/lib/platform-types";
 
 export default function CekTiketPage() {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [orders, setOrders] = useState<any[]>([]);
+  const [orders, setOrders] = useState<TicketOrderLookup[]>([]);
   const [hasSearched, setHasSearched] = useState(false);
 
   async function handleSearch(e: React.FormEvent) {
@@ -109,7 +110,11 @@ export default function CekTiketPage() {
 
                 {/* INI BAGIAN YANG DIPERBARUI: href sudah diarahkan ke URL e-ticket */}
                 <Link
-                  href={`/e-ticket/${order.id}`}
+                  href={
+                    order.tickets?.[0]?.id
+                      ? `/ticket/${order.tickets[0].id}`
+                      : "#"
+                  }
                   className="w-full md:w-auto"
                 >
                   <Button

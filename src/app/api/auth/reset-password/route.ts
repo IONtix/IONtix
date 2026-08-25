@@ -3,21 +3,79 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 
+import {
+  validatePasswordPolicy,
+} from "@/lib/auth/password-policy";
+
+import {
+  checkResetPasswordRateLimit,
+} from "@/lib/security/reset-password-rate-limit";
+
 export async function POST(req: Request) {
   try {
-    const { token, newPassword } = await req.json();
+    const body =
+      await req.json() as {
+        token?: unknown;
+        newPassword?: unknown;
+      };
 
-    if (!token || !newPassword) {
+    const token =
+      typeof body.token === "string"
+        ? body.token.trim()
+        : "";
+
+    const newPassword =
+      typeof body.newPassword === "string"
+        ? body.newPassword
+        : "";
+
+    if (
+      !token ||
+      !newPassword
+    ) {
       return NextResponse.json(
-        { error: "Token dan password baru wajib diisi" },
+        {
+          error:
+            "Token dan password baru wajib diisi",
+        },
         { status: 400 },
       );
     }
 
-    if (newPassword.length < 8) {
+    const passwordPolicy =
+      validatePasswordPolicy(
+        newPassword,
+      );
+
+    if (
+      !passwordPolicy.valid
+    ) {
       return NextResponse.json(
-        { error: "Password minimal harus 8 karakter" },
+        {
+          error:
+            passwordPolicy.reason ??
+            "Password tidak memenuhi kebijakan keamanan.",
+        },
         { status: 400 },
+      );
+    }
+
+    const rateLimitResult =
+      await checkResetPasswordRateLimit({
+        token,
+        headers:
+          req.headers,
+      });
+
+    if (
+      !rateLimitResult.allowed
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Terlalu banyak percobaan reset password. Silakan coba lagi nanti.",
+        },
+        { status: 429 },
       );
     }
 
@@ -52,7 +110,7 @@ export async function POST(req: Request) {
     return NextResponse.json({
       message: "Password berhasil diperbarui! Silakan login.",
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Error reset password:", error);
     return NextResponse.json(
       { error: "Gagal memperbarui password" },

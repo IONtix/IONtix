@@ -1,6 +1,11 @@
 import Link from "next/link";
+import Image from "next/image";
 import prisma from "@/lib/prisma";
 import { notFound } from "next/navigation";
+import { requireEventPermission } from "@/lib/auth/organization";
+import { getEventStatusMeta } from "@/lib/events/status";
+import { requireAuth } from "@/lib/auth/authorization";
+import EventPublishControl from "./_components/EventPublishControl";
 import {
   ChevronLeft,
   Edit3,
@@ -18,13 +23,20 @@ import {
 export default async function EventDetailPage({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: Promise<{ eventId: string }>;
 }) {
-  const { id } = await params;
+  const { eventId } = await params;
+
+  await requireEventPermission(
+    eventId,
+    "events.manage",
+  );
+
+  const user = await requireAuth();
 
   // Ambil detail event beserta relasinya
   const event = await prisma.event.findUnique({
-    where: { id },
+    where: { id: eventId },
     include: {
       categories: true,
       eo: true,
@@ -50,9 +62,12 @@ export default async function EventDetailPage({
 
   const imageUrl = event.imageUrl || null;
   const logoUrl = event.logoUrl || null;
+  const statusMeta = getEventStatusMeta(event.status);
 
   // Parse Custom Fields dari JSON
-  const customFields = event.customFields ? (event.customFields as any[]) : [];
+  const customFields = Array.isArray(event.customFields)
+    ? (event.customFields as unknown as Array<{ label?: string; type?: string; required?: boolean }>)
+    : [];
 
   const totalCapacity = event.categories.reduce(
     (acc, cat) => acc + (cat.capacity || 0),
@@ -89,8 +104,10 @@ export default async function EventDetailPage({
           {/* BANNER POSTER */}
           <div className="lg:col-span-5 relative bg-[#0A0E17] min-h-70 sm:min-h-90 flex items-center justify-center border-b lg:border-b-0 lg:border-r border-[#1E293B]">
             {imageUrl ? (
-              <img
+              <Image
                 src={imageUrl}
+                width={1200}
+                height={700}
                 alt={event.title}
                 className="w-full h-full object-cover"
               />
@@ -100,8 +117,11 @@ export default async function EventDetailPage({
               </div>
             )}
             <div className="absolute top-4 left-4 z-10">
-              <span className="px-3 py-1 bg-[#10B981]/20 text-[#10B981] border border-[#10B981]/30 rounded-full text-[10px] font-black uppercase tracking-widest backdrop-blur-md">
-                {event.isPublished ? "BERJALAN" : "DRAFT"}
+              <span
+                title={statusMeta.description}
+                className="px-3 py-1 bg-black/60 border border-white/10 text-white rounded-full text-[10px] font-black uppercase tracking-widest backdrop-blur-md"
+              >
+                {statusMeta.label}
               </span>
             </div>
             <div className="absolute top-4 right-4 z-10">
@@ -117,8 +137,10 @@ export default async function EventDetailPage({
             <div>
               <div className="flex items-center gap-3 mb-4">
                 {logoUrl ? (
-                  <img
+                  <Image
                     src={logoUrl}
+                    width={80}
+                    height={80}
                     alt="Logo EO"
                     className="w-10 h-10 rounded-full border-2 border-[#1E293B] object-cover bg-white"
                   />
@@ -188,6 +210,12 @@ export default async function EventDetailPage({
         </div>
 
         {/* MAIN CONTENT GRID */}
+        <EventPublishControl
+          eventId={event.id}
+          status={event.status}
+          role={user.role}
+        />
+
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           {/* KOLOM KIRI (7 KOLOM) */}
           <div className="lg:col-span-7 space-y-8">

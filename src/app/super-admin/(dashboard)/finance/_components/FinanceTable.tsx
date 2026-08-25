@@ -15,14 +15,14 @@ interface TransactionData {
   amount: number;
   status: string;
   createdAt: Date;
-  paymentMethod?: string;
+  paymentMethod?: string | null;
   runner?: {
     name?: string | null;
     email?: string;
   } | null;
 }
 
-export default function FinanceTable({ initialData }: { initialData: any[] }) {
+export default function FinanceTable({ initialData }: { initialData: TransactionData[] }) {
   const [searchTerm, setSearchTerm] = useState("");
 
   const filtered = initialData.filter((trx: TransactionData) => {
@@ -45,7 +45,7 @@ export default function FinanceTable({ initialData }: { initialData: any[] }) {
     }).format(val);
   };
 
-  const formatDate = (dateValue: any) => {
+  const formatDate = (dateValue: Date | string | undefined) => {
     if (!dateValue) return "-";
     return new Intl.DateTimeFormat("id-ID", {
       day: "numeric",

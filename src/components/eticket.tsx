@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import QRCode from "qrcode";
 
@@ -27,57 +28,65 @@ export default function ETicketCard({
   useEffect(() => {
     QRCode.toDataURL(orderId, { width: 300, margin: 2 })
       .then((url) => setQrCodeUrl(url))
-      .catch((err) => console.error("Error generating QR code:", err));
+      .catch((error) => console.error("Error generating QR code:", error));
   }, [orderId]);
 
   return (
-    <div className="w-full bg-card border-2 border-primary/20 rounded-3xl overflow-hidden shadow-lg my-4 text-left">
+    <div className="my-4 w-full overflow-hidden rounded-3xl border-2 border-primary/20 bg-card text-left shadow-lg">
       {/* Header Tiket */}
-      <div className="bg-primary p-5 text-primary-foreground text-center">
-        <div className="text-[10px] uppercase tracking-widest font-bold opacity-80 mb-1">
+      <div className="bg-primary p-5 text-center text-primary-foreground">
+        <div className="mb-1 text-[10px] font-bold uppercase tracking-widest opacity-80">
           Official E-Ticket
         </div>
+
         <h2 className="text-xl font-black tracking-tight">{eventTitle}</h2>
-        <span className="inline-block mt-2 bg-background/20 text-primary-foreground px-3 py-0.5 rounded-full text-xs font-semibold">
+
+        <span className="mt-2 inline-block rounded-full bg-background/20 px-3 py-0.5 text-xs font-semibold text-primary-foreground">
           {ticketName}
         </span>
       </div>
 
       {/* Body Tiket */}
-      <div className="p-6 space-y-5">
+      <div className="space-y-5 p-6">
         {/* Display QR Code */}
-        <div className="flex flex-col items-center justify-center p-4 bg-muted/30 rounded-2xl border border-border/50">
+        <div className="flex flex-col items-center justify-center rounded-2xl border border-border/50 bg-muted/30 p-4">
           {qrCodeUrl ? (
-            // eslint-disable-next-ok-img-element
-            <img
+            <Image
               src={qrCodeUrl}
               alt="E-Ticket QR Code"
-              className="w-40 h-40 rounded-lg shadow-sm border bg-white p-2"
+              width={160}
+              height={160}
+              unoptimized
+              className="h-40 w-40 rounded-lg border bg-white p-2 shadow-sm"
             />
           ) : (
-            <div className="w-40 h-40 bg-muted animate-pulse rounded-lg flex items-center justify-center text-xs text-muted-foreground">
+            <div className="flex h-40 w-40 items-center justify-center rounded-lg bg-muted text-xs text-muted-foreground animate-pulse">
               Memuat QR Code...
             </div>
           )}
-          <p className="text-[10px] text-muted-foreground font-mono mt-2 tracking-widest">
+
+          <p className="mt-2 font-mono text-[10px] tracking-widest text-muted-foreground">
             ID: {orderId}
           </p>
         </div>
 
         {/* Detail Peserta */}
-        <div className="grid grid-cols-2 gap-3 text-xs border-t border-border/40 pt-4">
+        <div className="grid grid-cols-2 gap-3 border-t border-border/40 pt-4 text-xs">
           <div>
             <p className="text-muted-foreground">Nama Pelari</p>
-            <p className="font-bold text-foreground text-sm">{fullName}</p>
+            <p className="text-sm font-bold text-foreground">{fullName}</p>
           </div>
+
           <div>
             <p className="text-muted-foreground">Ukuran Jersey</p>
-            <p className="font-bold text-foreground text-sm">{jerseySize}</p>
+            <p className="text-sm font-bold text-foreground">{jerseySize}</p>
           </div>
+
           <div>
             <p className="text-muted-foreground">Lokasi</p>
             <p className="font-medium text-foreground">{location}</p>
           </div>
+
           <div>
             <p className="text-muted-foreground">Tanggal Event</p>
             <p className="font-medium text-foreground">{date}</p>
@@ -86,7 +95,7 @@ export default function ETicketCard({
       </div>
 
       {/* Footer Tiket */}
-      <div className="bg-muted/50 p-3 text-center border-t border-dashed border-border text-[11px] text-muted-foreground">
+      <div className="border-t border-dashed border-border bg-muted/50 p-3 text-center text-[11px] text-muted-foreground">
         Tunjukkan QR Code ini kepada panitia saat pengambilan Racepack.
       </div>
     </div>

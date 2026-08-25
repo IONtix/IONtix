@@ -1,6 +1,7 @@
 // src/app/super-admin/_components/RecentTransactions.tsx
 
 import { MoreHorizontal, CheckCircle2, Clock } from "lucide-react";
+import type { DashboardTransaction } from "@/lib/platform-types";
 
 const formatRupiah = (angka: number) => {
   return new Intl.NumberFormat("id-ID", {
@@ -13,7 +14,7 @@ const formatRupiah = (angka: number) => {
 export default function RecentTransactions({
   recentTransactions,
 }: {
-  recentTransactions: any[];
+  recentTransactions: DashboardTransaction[];
 }) {
   return (
     <div className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 transition-all hover:shadow-md">
@@ -60,12 +61,12 @@ export default function RecentTransactions({
                   className="transition-colors hover:bg-slate-50/80 group"
                 >
                   <td className="px-6 py-4 text-slate-500">
-                    {new Date(trx.createdAt).toLocaleDateString("id-ID", {
+                    {trx.createdAt || trx.date ? new Date(trx.createdAt ?? trx.date ?? "").toLocaleDateString("id-ID", {
                       day: "2-digit",
                       month: "short",
                       hour: "2-digit",
                       minute: "2-digit",
-                    })}
+                    }) : "-"}
                   </td>
                   <td className="px-6 py-4 font-medium text-slate-900 group-hover:text-blue-600 transition-colors">
                     {trx.runner?.name || "Anonim"}

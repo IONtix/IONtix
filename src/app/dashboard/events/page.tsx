@@ -1,6 +1,9 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import Image from "next/image";
+import type { DashboardEvent } from "@/lib/platform-types";
+import { getEventStatusMeta } from "@/lib/events/status";
 import Link from "next/link";
 import {
   Plus,
@@ -18,7 +21,7 @@ import {
 import { getEvents, deleteEventWithPassword } from "../../actions/event";
 
 export default function EventManagementPage() {
-  const [events, setEvents] = useState<any[]>([]);
+  const [events, setEvents] = useState<DashboardEvent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState("semua");
@@ -28,30 +31,36 @@ export default function EventManagementPage() {
     eventId: "",
     eventName: "",
   });
+
   const [deletePassword, setDeletePassword] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
 
   const fetchEvents = async () => {
     setIsLoading(true);
+
     try {
       const result = await getEvents();
-      if (result.success && result.data) {
+
+      if (result.success && Array.isArray(result.data)) {
         setEvents(result.data);
+      } else if (!result.success) {
+        setEvents([]);
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Terjadi kesalahan:", error);
+      setEvents([]);
     } finally {
       setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchEvents();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void fetchEvents();
   }, []);
 
-  // FUNGSI MEMASTIKAN URL GAMBAR SELALU VALID
-  const getValidImageUrl = (event: any) => {
+  const getValidImageUrl = (event: DashboardEvent) => {
     const rawImage =
       event.imageUrl ||
       event.posterUrl ||
@@ -73,29 +82,20 @@ export default function EventManagementPage() {
     return rawImage.startsWith("/") ? rawImage : `/${rawImage}`;
   };
 
-  // FUNGSI CEK STATUS OTOMATIS BERDASARKAN TANGGAL
-  const getEventStatus = (event: any) => {
-    if (event.isPublished === false) return "draft";
-
-    const eventDateObj = event.date ? new Date(event.date) : null;
-    const now = new Date();
-
-    if (eventDateObj && eventDateObj < now) {
-      return "selesai";
-    }
-
-    return "publish"; // Berjalan
+  const getEventStatus = (event: DashboardEvent) => {
+    return event.status || "DRAFT";
   };
 
-  // FITUR FILTER
   const filteredEvents = events.filter((event) => {
     const displayLocation =
       event.location || event.venue || event.locationName || "";
+
     const matchesSearch =
       event.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       displayLocation.toLowerCase().includes(searchQuery.toLowerCase());
 
     const status = getEventStatus(event);
+
     const matchesTab = activeTab === "semua" ? true : activeTab === status;
 
     return matchesSearch && matchesTab;
@@ -105,19 +105,25 @@ export default function EventManagementPage() {
     e.preventDefault();
     setDeleteError("");
     setIsDeleting(true);
+
     try {
       const result = await deleteEventWithPassword(
         deleteModal.eventId,
         deletePassword,
       );
+
       if (result.success) {
-        setDeleteModal({ isOpen: false, eventId: "", eventName: "" });
+        setDeleteModal({
+          isOpen: false,
+          eventId: "",
+          eventName: "",
+        });
         setDeletePassword("");
-        fetchEvents();
+        void fetchEvents();
       } else {
         setDeleteError(result.error || "Gagal menghapus event.");
       }
-    } catch (err) {
+    } catch {
       setDeleteError("Terjadi kesalahan jaringan.");
     } finally {
       setIsDeleting(false);
@@ -125,34 +131,45 @@ export default function EventManagementPage() {
   };
 
   const getStatusBadge = (status: string) => {
-    if (status === "publish") {
-      return (
-        <span className="px-3 py-1 bg-[#10B981]/10 text-[#10B981] border border-[#10B981]/20 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 z-20 relative">
-          <div className="w-1.5 h-1.5 rounded-full bg-[#10B981] animate-pulse" />{" "}
-          Berjalan
-        </span>
-      );
-    }
-    if (status === "selesai") {
-      return (
-        <span className="px-3 py-1 bg-red-500/10 text-red-500 border border-red-500/20 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 z-20 relative">
-          <div className="w-1.5 h-1.5 rounded-full bg-red-500" /> Selesai
-        </span>
-      );
-    }
+    const meta = getEventStatusMeta(status);
+
+    const toneClass = {
+      neutral:
+        "border-slate-500/20 bg-slate-500/10 text-slate-400",
+      warning:
+        "border-amber-500/20 bg-amber-500/10 text-amber-400",
+      success:
+        "border-emerald-500/20 bg-emerald-500/10 text-emerald-400",
+      danger:
+        "border-red-500/20 bg-red-500/10 text-red-400",
+      info:
+        "border-blue-500/20 bg-blue-500/10 text-blue-400",
+    }[meta.tone];
+
+    const dotClass = {
+      neutral: "bg-slate-400",
+      warning: "bg-amber-400",
+      success: "bg-emerald-400",
+      danger: "bg-red-400",
+      info: "bg-blue-400",
+    }[meta.tone];
+
     return (
-      <span className="px-3 py-1 bg-slate-500/10 text-slate-400 border border-slate-500/20 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 z-20 relative">
-        <div className="w-1.5 h-1.5 rounded-full bg-slate-400" /> Draft
+      <span
+        title={meta.description}
+        className={`z-20 relative flex items-center gap-1.5 rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-widest ${toneClass}`}
+      >
+        <div className={`h-1.5 w-1.5 rounded-full ${dotClass}`} />
+        {meta.label}
       </span>
     );
   };
 
   return (
-    <div className="min-h-screen bg-[#0A0E17] text-slate-200 p-6 sm:p-8 md:p-10 font-sans selection:bg-[#F57C00] selection:text-white">
-      {/* HEADER SECTION */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-10 max-w-7xl mx-auto">
+    <div className="min-h-screen bg-[#0A0E17] p-6 font-sans text-slate-200 selection:bg-[#F57C00] selection:text-white sm:p-8 md:p-10">
+      <div className="mx-auto mb-10 flex max-w-7xl flex-col items-start justify-between gap-6 md:flex-row md:items-center">
         <div>
-          <h1 className="text-3xl font-black text-white tracking-tight mb-2">
+          <h1 className="mb-2 text-3xl font-black tracking-tight text-white">
             Manajemen Event
           </h1>
           <p className="text-sm font-medium text-slate-400">
@@ -160,9 +177,10 @@ export default function EventManagementPage() {
             operasional event Anda.
           </p>
         </div>
+
         <Link
           href="/dashboard/events/create"
-          className="bg-linear-to-r from-[#F57C00] to-[#E65100] text-white px-7 py-3.5 rounded-xl font-bold flex items-center gap-2 shadow-[0_0_20px_rgba(245,124,0,0.3)] hover:shadow-[0_0_30px_rgba(245,124,0,0.5)] hover:-translate-y-0.5 transition-all"
+          className="flex items-center gap-2 rounded-xl bg-linear-to-r from-[#F57C00] to-[#E65100] px-7 py-3.5 font-bold text-white shadow-[0_0_20px_rgba(245,124,0,0.3)] transition-all hover:-translate-y-0.5 hover:shadow-[0_0_30px_rgba(245,124,0,0.5)]"
         >
           <Plus size={20} strokeWidth={2.5} />
           <span className="text-sm uppercase tracking-wider">
@@ -171,19 +189,35 @@ export default function EventManagementPage() {
         </Link>
       </div>
 
-      {/* FILTER & TABS */}
-      <div className="flex flex-col lg:flex-row justify-between items-center gap-6 mb-8 max-w-7xl mx-auto">
-        <div className="flex bg-[#131A2B] p-1.5 rounded-xl border border-[#1E293B] shadow-lg w-full lg:w-auto overflow-x-auto no-scrollbar">
+      <div className="mx-auto mb-8 flex max-w-7xl flex-col items-center justify-between gap-6 lg:flex-row">
+        <div className="no-scrollbar flex w-full overflow-x-auto rounded-xl border border-[#1E293B] bg-[#131A2B] p-1.5 shadow-lg lg:w-auto">
           {[
-            { id: "semua", label: "Semua Event" },
-            { id: "publish", label: "Berjalan" },
-            { id: "draft", label: "Draft" },
-            { id: "selesai", label: "Selesai" },
+            {
+              id: "semua",
+              label: "Semua Event",
+            },
+            {
+              id: "DRAFT",
+              label: "Draft",
+            },
+            {
+              id: "PENDING_REVIEW",
+              label: "Menunggu Review",
+            },
+            {
+              id: "PUBLISHED",
+              label: "Dipublikasikan",
+            },
+            {
+              id: "COMPLETED",
+              label: "Selesai",
+            },
           ].map((tab) => (
             <button
               key={tab.id}
+              type="button"
               onClick={() => setActiveTab(tab.id)}
-              className={`px-6 py-2.5 rounded-lg text-xs font-bold uppercase tracking-widest transition-all whitespace-nowrap ${
+              className={`whitespace-nowrap rounded-lg px-6 py-2.5 text-xs font-bold uppercase tracking-widest transition-all ${
                 activeTab === tab.id
                   ? "bg-[#1E293B] text-white shadow-md"
                   : "text-slate-500 hover:text-slate-300"
@@ -193,63 +227,70 @@ export default function EventManagementPage() {
             </button>
           ))}
         </div>
-        <div className="relative w-full lg:w-80 group">
-          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+
+        <div className="group relative w-full lg:w-80">
+          <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
             <Search
               size={18}
-              className="text-slate-500 group-focus-within:text-[#F57C00] transition-colors"
+              className="text-slate-500 transition-colors group-focus-within:text-[#F57C00]"
             />
           </div>
+
           <input
             type="text"
             placeholder="Cari nama atau lokasi..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-[#131A2B] border border-[#1E293B] text-white rounded-xl pl-11 pr-4 py-3 focus:outline-none focus:border-[#F57C00] focus:ring-1 focus:ring-[#F57C00] transition-all text-sm font-medium shadow-lg placeholder:text-slate-600"
+            className="w-full rounded-xl border border-[#1E293B] bg-[#131A2B] py-3 pl-11 pr-4 text-sm font-medium text-white shadow-lg outline-none transition-all placeholder:text-slate-600 focus:border-[#F57C00] focus:ring-1 focus:ring-[#F57C00]"
           />
         </div>
       </div>
 
-      {/* DATA TAMPILAN */}
-      <div className="max-w-7xl mx-auto">
+      <div className="mx-auto max-w-7xl">
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-32">
-            <Loader2 size={48} className="text-[#F57C00] animate-spin mb-4" />
-            <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">
+            <Loader2 size={48} className="mb-4 animate-spin text-[#F57C00]" />
+            <p className="text-xs font-bold uppercase tracking-widest text-slate-500">
               Menarik Data Event...
             </p>
           </div>
         ) : filteredEvents.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 bg-[#131A2B] border border-[#1E293B] rounded-3xl shadow-xl">
-            <div className="w-20 h-20 bg-[#1E293B] rounded-2xl flex items-center justify-center mb-6 border border-[#2A374A]">
+          <div className="flex flex-col items-center justify-center rounded-3xl border border-[#1E293B] bg-[#131A2B] py-20 shadow-xl">
+            <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-2xl border border-[#2A374A] bg-[#1E293B]">
               <Calendar size={32} className="text-slate-400" />
             </div>
-            <h3 className="text-xl font-black text-white mb-2 tracking-tight">
+
+            <h3 className="mb-2 text-xl font-black tracking-tight text-white">
               Belum Ada Event
             </h3>
-            <p className="text-slate-400 text-sm mb-6 max-w-md text-center">
-              Anda belum membuat event apapun, atau tidak ada data pada filter "
-              {activeTab}".
+
+            <p className="mb-6 max-w-md text-center text-sm text-slate-400">
+              Anda belum membuat event apapun, atau tidak ada data pada filter
+              &quot;{activeTab}&quot;.
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
             {filteredEvents.map((event) => {
               const eventDateObj = event.date
                 ? new Date(event.date)
                 : new Date();
+
               const formattedDate = eventDateObj.toLocaleDateString("id-ID", {
                 day: "numeric",
                 month: "short",
                 year: "numeric",
               });
+
               const formattedTime = eventDateObj.toLocaleTimeString("id-ID", {
                 hour: "2-digit",
                 minute: "2-digit",
               });
 
               const status = getEventStatus(event);
-              const isSelesai = status === "selesai";
+
+              const isSelesai = status === "COMPLETED";
+
               const displayLocation =
                 event.location ||
                 event.venue ||
@@ -261,80 +302,87 @@ export default function EventManagementPage() {
               return (
                 <div
                   key={event.id}
-                  className={`bg-[#131A2B] rounded-3xl border flex flex-col overflow-hidden transition-all duration-300 group ${
+                  className={`group flex flex-col overflow-hidden rounded-3xl border bg-[#131A2B] transition-all duration-300 ${
                     isSelesai
                       ? "border-slate-800 opacity-80"
                       : "border-[#1E293B] hover:border-[#F57C00]/50 hover:shadow-[0_10px_30px_rgba(245,124,0,0.1)]"
                   }`}
                 >
-                  <div className="h-52 relative overflow-hidden bg-[#0A0E17]">
-                    <div className="absolute inset-0 bg-linear-to-t from-[#131A2B] via-[#131A2B]/40 to-transparent z-10 pointer-events-none" />
+                  <div className="relative h-52 overflow-hidden bg-[#0A0E17]">
+                    <div className="pointer-events-none absolute inset-0 z-10 bg-linear-to-t from-[#131A2B] via-[#131A2B]/40 to-transparent" />
 
                     {imageUrl ? (
-                      <img
+                      <Image
                         src={imageUrl}
                         alt={event.title}
-                        className={`w-full h-full object-cover transition-transform duration-700 opacity-80 ${
+                        width={1200}
+                        height={700}
+                        className={`h-full w-full object-cover opacity-80 transition-transform duration-700 ${
                           isSelesai
                             ? "grayscale"
-                            : "group-hover:opacity-100 group-hover:scale-110"
+                            : "group-hover:scale-110 group-hover:opacity-100"
                         }`}
                       />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center text-slate-600 text-xs font-bold uppercase bg-[#0F1623]">
+                      <div className="flex h-full w-full items-center justify-center bg-[#0F1623] text-xs font-bold uppercase text-slate-600">
                         Tanpa Banner
                       </div>
                     )}
 
                     {isSelesai && (
-                      <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px] z-10 flex items-center justify-center">
-                        <span className="bg-red-500 text-white font-black text-xs px-4 py-2 rounded-full uppercase tracking-wider flex items-center gap-1.5 shadow-lg">
+                      <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/60 backdrop-blur-[2px]">
+                        <span className="flex items-center gap-1.5 rounded-full bg-red-500 px-4 py-2 text-xs font-black uppercase tracking-wider text-white shadow-lg">
                           EVENT TELAH SELESAI
                         </span>
                       </div>
                     )}
 
-                    <div className="absolute top-4 left-4 z-20 flex gap-2">
+                    <div className="absolute left-4 top-4 z-20 flex gap-2">
                       {getStatusBadge(status)}
                     </div>
-                    <div className="absolute top-4 right-4 z-20">
-                      <span className="bg-black/60 backdrop-blur-md border border-white/10 px-3 py-1.5 rounded-lg text-[10px] font-black text-white uppercase tracking-widest flex items-center gap-1.5">
+
+                    <div className="absolute right-4 top-4 z-20">
+                      <span className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-black/60 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-white backdrop-blur-md">
                         <Tag size={12} className="text-[#F57C00]" />{" "}
                         {event.category || "RUN"}
                       </span>
                     </div>
                   </div>
 
-                  <div className="p-6 flex-1 flex flex-col relative z-20 -mt-8">
+                  <div className="-mt-8 relative z-20 flex flex-1 flex-col p-6">
                     <h3
-                      className={`text-xl font-black text-white mb-4 line-clamp-2 leading-snug drop-shadow-md ${
+                      className={`mb-4 line-clamp-2 text-xl font-black leading-snug tracking-tight text-white drop-shadow-md ${
                         !isSelesai &&
-                        "group-hover:text-[#F57C00] transition-colors"
+                        "transition-colors group-hover:text-[#F57C00]"
                       }`}
                     >
                       {event.title}
                     </h3>
-                    <div className="space-y-3 mb-6">
+
+                    <div className="mb-6 space-y-3">
                       <div className="flex items-center gap-3 text-sm font-semibold text-slate-400">
-                        <div className="p-1.5 rounded-md bg-[#1E293B] text-[#3B82F6] border border-[#2A374A]">
+                        <div className="rounded-md border border-[#2A374A] bg-[#1E293B] p-1.5 text-[#3B82F6]">
                           <Calendar size={16} />
                         </div>
+
                         <span>
                           {formattedDate} • {formattedTime} WIB
                         </span>
                       </div>
+
                       <div className="flex items-center gap-3 text-sm font-semibold text-slate-400">
-                        <div className="p-1.5 rounded-md bg-[#1E293B] text-[#10B981] border border-[#2A374A]">
+                        <div className="rounded-md border border-[#2A374A] bg-[#1E293B] p-1.5 text-[#10B981]">
                           <MapPin size={16} />
                         </div>
+
                         <span className="truncate">{displayLocation}</span>
                       </div>
                     </div>
                   </div>
 
-                  {/* KARTU BOTTOM: HAPUS DI KIRI, KELOLA EVENT DI KANAN */}
-                  <div className="px-6 py-4 border-t border-[#1E293B] flex items-center justify-between bg-[#0F1623]">
+                  <div className="flex items-center justify-between border-t border-[#1E293B] bg-[#0F1623] px-6 py-4">
                     <button
+                      type="button"
                       onClick={() =>
                         setDeleteModal({
                           isOpen: true,
@@ -342,25 +390,25 @@ export default function EventManagementPage() {
                           eventName: event.title,
                         })
                       }
-                      className="p-2 hover:bg-red-500/10 rounded-lg text-slate-400 hover:text-red-500 transition-colors cursor-pointer"
+                      className="cursor-pointer rounded-lg p-2 text-slate-400 transition-colors hover:bg-red-500/10 hover:text-red-500"
                       title="Hapus Event"
                     >
                       <Trash2 size={18} />
                     </button>
 
                     {isSelesai ? (
-                      <span className="flex items-center gap-1.5 text-[11px] font-black text-slate-500 uppercase tracking-widest cursor-not-allowed">
+                      <span className="flex cursor-not-allowed items-center gap-1.5 text-[11px] font-black uppercase tracking-widest text-slate-500">
                         Ditutup
                       </span>
                     ) : (
                       <Link
                         href={`/dashboard/events/${event.id}`}
-                        className="flex items-center gap-1.5 text-xs font-black text-[#F57C00] hover:text-[#E65100] uppercase tracking-widest transition-colors group/btn"
+                        className="group/btn flex items-center gap-1.5 text-xs font-black uppercase tracking-widest text-[#F57C00] transition-colors hover:text-[#E65100]"
                       >
                         KELOLA EVENT{" "}
                         <ChevronRight
                           size={16}
-                          className="group-hover/btn:translate-x-1 transition-transform"
+                          className="transition-transform group-hover/btn:translate-x-1"
                         />
                       </Link>
                     )}
@@ -372,83 +420,102 @@ export default function EventManagementPage() {
         )}
       </div>
 
-      {/* MODAL HAPUS */}
       {deleteModal.isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-[#131A2B] border border-[#1E293B] rounded-3xl w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95">
-            <div className="p-6 border-b border-[#1E293B] flex items-center justify-between bg-[#0A0E17]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-md overflow-hidden rounded-3xl border border-[#1E293B] bg-[#131A2B] shadow-2xl animate-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-[#1E293B] bg-[#0A0E17] p-6">
               <div className="flex items-center gap-3 text-red-500">
-                <div className="p-2 bg-red-500/10 rounded-lg">
+                <div className="rounded-lg bg-red-500/10 p-2">
                   <AlertCircle size={24} />
                 </div>
+
                 <h2 className="text-lg font-black tracking-tight">
                   Hapus Event
                 </h2>
               </div>
+
               <button
+                type="button"
                 onClick={() =>
-                  setDeleteModal({ isOpen: false, eventId: "", eventName: "" })
+                  setDeleteModal({
+                    isOpen: false,
+                    eventId: "",
+                    eventName: "",
+                  })
                 }
-                className="text-slate-500 hover:text-white transition-colors cursor-pointer"
+                className="cursor-pointer text-slate-500 transition-colors hover:text-white"
+                aria-label="Tutup dialog hapus event"
               >
                 <X size={20} />
               </button>
             </div>
-            <form onSubmit={handleConfirmDelete} className="p-6 space-y-6">
+
+            <form onSubmit={handleConfirmDelete} className="space-y-6 p-6">
               <div>
-                <p className="text-slate-300 text-sm mb-2">
+                <p className="mb-2 text-sm text-slate-300">
                   Anda akan menghapus event{" "}
                   <span className="font-bold text-white">
-                    "{deleteModal.eventName}"
+                    &quot;
+                    {deleteModal.eventName}
+                    &quot;
                   </span>{" "}
                   secara permanen.
                 </p>
-                <p className="text-slate-500 text-xs">
+
+                <p className="text-xs text-slate-500">
                   Silakan masukkan password akun EO Anda untuk konfirmasi
                   keamanan.
                 </p>
               </div>
+
               <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                   Password Konfirmasi
                 </label>
+
                 <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                  <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
                     <Lock size={16} className="text-slate-500" />
                   </div>
+
                   <input
                     type="password"
                     required
                     value={deletePassword}
                     onChange={(e) => setDeletePassword(e.target.value)}
                     placeholder="Masukkan password Anda..."
-                    className="w-full bg-[#0A0E17] border border-[#1E293B] text-white rounded-xl pl-11 pr-4 py-3 focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 transition-all text-sm"
+                    className="w-full rounded-xl border border-[#1E293B] bg-[#0A0E17] py-3 pl-11 pr-4 text-sm text-white outline-none transition-all focus:border-red-500 focus:ring-1 focus:ring-red-500"
                   />
                 </div>
+
                 {deleteError && (
-                  <p className="text-red-500 text-xs font-bold mt-1">
+                  <p className="mt-1 text-xs font-bold text-red-500">
                     {deleteError}
                   </p>
                 )}
               </div>
+
               <div className="flex items-center gap-3 pt-2">
                 <button
                   type="button"
-                  onClick={() =>
+                  onClick={() => {
                     setDeleteModal({
                       isOpen: false,
                       eventId: "",
                       eventName: "",
-                    })
-                  }
-                  className="flex-1 px-4 py-3 rounded-xl font-bold text-sm text-slate-300 bg-[#1E293B] hover:bg-[#2A374A] transition-colors cursor-pointer"
+                    });
+                    setDeletePassword("");
+                    setDeleteError("");
+                  }}
+                  className="flex-1 cursor-pointer rounded-xl bg-[#1E293B] px-4 py-3 text-sm font-bold text-slate-300 transition-colors hover:bg-[#2A374A]"
                 >
                   Batal
                 </button>
+
                 <button
                   type="submit"
                   disabled={isDeleting || !deletePassword}
-                  className="flex-1 px-4 py-3 rounded-xl font-bold text-sm text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-[0_0_15px_rgba(220,38,38,0.3)] cursor-pointer"
+                  className="flex-1 cursor-pointer rounded-xl bg-red-600 px-4 py-3 text-sm font-bold text-white shadow-[0_0_15px_rgba(220,38,38,0.3)] transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {isDeleting ? "Menghapus..." : "Ya, Hapus Permanen"}
                 </button>

@@ -1,77 +1,227 @@
-// src/app/api/users/route.ts
 import { NextResponse } from "next/server";
+import bcrypt from "bcryptjs";
+
 import prisma from "@/lib/prisma";
-import bcrypt from "bcrypt";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import {
+  authorizationErrorResponse,
+  requirePermission,
+} from "@/lib/auth/authorization";
+
+import { UserStatus } from "@/generated/prisma/client";
+import { isManagedRole } from "@/lib/admin/role-policy";
+
+const CREATEABLE_STATUSES = new Set<UserStatus>([
+  UserStatus.ACTIVE,
+  UserStatus.SUSPENDED,
+  UserStatus.PENDING,
+]);
 
 export async function POST(req: Request) {
   try {
-    // 1. Cek Autentikasi (Hanya Super Admin yang boleh membuat user)
-    const session = await getServerSession(authOptions);
-    if (!session?.user || (session.user as any).role !== "SUPER_ADMIN") {
-      return NextResponse.json(
-        { message: "Akses ditolak. Hanya Super Admin." },
-        { status: 401 },
-      );
-    }
+    const actor = await requirePermission("users.manage");
 
-    // 2. Ambil data dari body request
     const body = await req.json();
-    const { name, email, password, role, phone, status } = body;
 
-    // 3. Validasi dasar
+    const name = typeof body.name === "string" ? body.name.trim() : "";
+
+    const email =
+      typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+
+    const password = typeof body.password === "string" ? body.password : "";
+
+    const roleName =
+      typeof body.role === "string"
+        ? body.role.trim().toUpperCase()
+        : "PARTICIPANT";
+
+    const phone = typeof body.phone === "string" ? body.phone.trim() : null;
+
+    const requestedStatus =
+      typeof body.status === "string"
+        ? body.status.trim().toUpperCase()
+        : UserStatus.ACTIVE;
+
     if (!name || !email || !password) {
       return NextResponse.json(
-        { message: "Nama, Email, dan Password wajib diisi!" },
+        {
+          message: "Nama, Email, dan Password wajib diisi!",
+        },
         { status: 400 },
       );
     }
 
-    if (password.length < 6) {
+    if (password.length < 8) {
       return NextResponse.json(
-        { message: "Password minimal 6 karakter!" },
+        {
+          message: "Password minimal 8 karakter!",
+        },
         { status: 400 },
       );
     }
 
-    // 4. Cek apakah email sudah terdaftar di database
+    if (!Object.values(UserStatus).includes(requestedStatus as UserStatus)) {
+      return NextResponse.json(
+        {
+          message: "Status pengguna tidak valid.",
+        },
+        { status: 400 },
+      );
+    }
+
+    const status = requestedStatus as UserStatus;
+
+    if (!CREATEABLE_STATUSES.has(status)) {
+      return NextResponse.json(
+        {
+          message: "User baru tidak dapat dibuat dengan status DELETED.",
+        },
+        { status: 400 },
+      );
+    }
+
     const existingUser = await prisma.user.findUnique({
-      where: { email },
+      where: {
+        email,
+      },
+      select: {
+        id: true,
+      },
     });
 
     if (existingUser) {
       return NextResponse.json(
-        { message: "Email ini sudah digunakan!" },
+        {
+          message: "Email ini sudah digunakan!",
+        },
+        { status: 409 },
+      );
+    }
+
+    /*
+     * Role sekarang bersumber dari database.
+     * Tidak ada lagi hard-coded ALLOWED_ROLES.
+     */
+    if (!isManagedRole(roleName)) {
+      return NextResponse.json(
+        {
+          message:
+            "Role tidak valid. Gunakan SUPER_ADMIN, EVENT_ORGANIZER, STAFF, atau PARTICIPANT.",
+        },
         { status: 400 },
       );
     }
 
-    // 5. Enkripsi (Hash) Password menggunakan bcrypt
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    // 6. Simpan data ke Database melalui Prisma
-    // CATATAN: Jika 'phone' atau 'status' belum ada di schema.prisma Anda, hapus atau komen baris tersebut
-    const newUser = await prisma.user.create({
-      data: {
-        name,
-        email,
-        password: hashedPassword,
-        role,
-        // phone,  // Hapus tanda '//' jika field phone sudah ada di schema.prisma
-        // status, // Hapus tanda '//' jika field status sudah ada di schema.prisma
+    const roleRecord = await prisma.role.findUnique({
+      where: {
+        name: roleName,
+      },
+      select: {
+        id: true,
+        name: true,
+        isSystem: true,
       },
     });
 
+    if (!roleRecord) {
+      return NextResponse.json(
+        {
+          message: `Role "${roleName}" tidak ditemukan.`,
+        },
+        { status: 400 },
+      );
+    }
+
+    /*
+     * SUPER_ADMIN adalah privilege platform-level.
+     * Membuat user dengan role SUPER_ADMIN
+     * membutuhkan roles.manage.
+     */
+    if (
+      roleRecord.name === "SUPER_ADMIN" &&
+      actor.role !== "SUPER_ADMIN" &&
+      !actor.permissions.includes("roles.manage")
+    ) {
+      return NextResponse.json(
+        {
+          message:
+            "Permission roles.manage diperlukan untuk membuat user SUPER_ADMIN.",
+        },
+        { status: 403 },
+      );
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 12);
+
+    /*
+     * User + audit log dibuat dalam satu
+     * database transaction.
+     */
+    const createdUser = await prisma.$transaction(async (tx) => {
+      const newUser = await tx.user.create({
+        data: {
+          name,
+          email,
+          password: hashedPassword,
+          phone: phone || null,
+          status,
+          role: {
+            connect: {
+              id: roleRecord.id,
+            },
+          },
+        },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phone: true,
+          status: true,
+          isDeleted: true,
+          emailVerifiedAt: true,
+          createdAt: true,
+          updatedAt: true,
+          role: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          actorUserId: actor.id,
+          action: "USER_CREATE",
+          module: "users",
+          entityType: "User",
+          entityId: newUser.id,
+          afterData: {
+            id: newUser.id,
+            name: newUser.name,
+            email: newUser.email,
+            phone: newUser.phone,
+            status: newUser.status,
+            role: newUser.role?.name ?? null,
+          },
+          metadata: {
+            createdBy: actor.email,
+            assignedRole: roleRecord.name,
+          },
+        },
+      });
+
+      return newUser;
+    });
+
     return NextResponse.json(
-      { message: "Pengguna berhasil ditambahkan!", user: newUser },
+      {
+        message: "Pengguna berhasil ditambahkan!",
+        user: createdUser,
+      },
       { status: 201 },
     );
-  } catch (error: any) {
-    console.error("API Create User Error:", error);
-    return NextResponse.json(
-      { message: error.message || "Terjadi kesalahan pada server." },
-      { status: 500 },
-    );
+  } catch (error: unknown) {
+    return authorizationErrorResponse(error);
   }
 }
