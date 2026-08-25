@@ -199,13 +199,19 @@ enum SettlementStatus {
 // IDENTITY / RBAC
 // ======================================================
 
+enum QualificationReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model Role {
-  id          String       @id @default(cuid())
-  name        String       @unique
+  id          String   @id @default(cuid())
+  name        String   @unique
   description String?
-  isSystem    Boolean      @default(false)
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  isSystem    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   users       User[]
   permissions Permission[]
@@ -215,12 +221,12 @@ model Role {
 }
 
 model Permission {
-  id          String       @id @default(cuid())
-  name        String       @unique
+  id          String   @id @default(cuid())
+  name        String   @unique
   description String?
   module      String?
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   roles Role[]
 
@@ -228,33 +234,33 @@ model Permission {
 }
 
 model User {
-  id                String           @id @default(cuid())
-  name              String
-  email             String           @unique
-  password          String
-  phone             String?
-  roleId            String?
-  role              Role?            @relation(fields: [roleId], references: [id])
-  resetToken        String?          @unique
-  resetTokenExpiry  DateTime?
-  isDeleted         Boolean          @default(false)
-  status            UserStatus       @default(ACTIVE)
-  emailVerifiedAt   DateTime?
-  lastLoginAt       DateTime?
-  createdAt         DateTime         @default(now())
-  updatedAt         DateTime         @updatedAt
+  id               String     @id @default(cuid())
+  name             String
+  email            String     @unique
+  password         String
+  phone            String?
+  roleId           String?
+  role             Role?      @relation(fields: [roleId], references: [id])
+  resetToken       String?    @unique
+  resetTokenExpiry DateTime?
+  isDeleted        Boolean    @default(false)
+  status           UserStatus @default(ACTIVE)
+  emailVerifiedAt  DateTime?
+  lastLoginAt      DateTime?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
 
-  events            Event[]          @relation("EOEvents")
+  events                  Event[]              @relation("EOEvents")
   organizationMemberships OrganizationMember[]
-  participant       Participant?
-  orders            Order[]          @relation("BuyerOrders")
-  transactions      Transaction[]
-  payments          Payment[]
-  tickets           Ticket[]         @relation("UserTickets")
-  auditLogs         AuditLog[]       @relation("ActorAuditLogs")
-  adminActions      AdminAction[]    @relation("AdminActorActions")
-  ticketTransfersFrom TicketTransfer[] @relation("TransferFrom")
-  ticketTransfersTo   TicketTransfer[] @relation("TransferTo")
+  participant             Participant?
+  orders                  Order[]              @relation("BuyerOrders")
+  transactions            Transaction[]
+  payments                Payment[]
+  tickets                 Ticket[]             @relation("UserTickets")
+  auditLogs               AuditLog[]           @relation("ActorAuditLogs")
+  adminActions            AdminAction[]        @relation("AdminActorActions")
+  ticketTransfersFrom     TicketTransfer[]     @relation("TransferFrom")
+  ticketTransfersTo       TicketTransfer[]     @relation("TransferTo")
 
   @@index([roleId])
   @@index([status])
@@ -279,38 +285,38 @@ model PasswordResetToken {
 // ======================================================
 
 model Organization {
-  id            String             @id @default(cuid())
-  name          String
-  slug          String             @unique
-  legalName     String?
-  email         String?
-  phone         String?
-  website       String?
-  logoUrl       String?
-  description   String?
-  status        OrganizationStatus @default(PENDING)
-  verifiedAt    DateTime?
-  createdAt     DateTime           @default(now())
-  updatedAt     DateTime           @updatedAt
+  id          String             @id @default(cuid())
+  name        String
+  slug        String             @unique
+  legalName   String?
+  email       String?
+  phone       String?
+  website     String?
+  logoUrl     String?
+  description String?
+  status      OrganizationStatus @default(PENDING)
+  verifiedAt  DateTime?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
 
-  members       OrganizationMember[]
-  events        Event[]
-  settlements   Settlement[]
+  members     OrganizationMember[]
+  events      Event[]
+  settlements Settlement[]
 
   @@index([status])
   @@index([createdAt])
 }
 
 model OrganizationMember {
-  id             String       @id @default(cuid())
+  id             String   @id @default(cuid())
   organizationId String
   userId         String
   roleId         String?
   title          String?
-  isOwner        Boolean      @default(false)
-  isActive       Boolean      @default(true)
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  isOwner        Boolean  @default(false)
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -336,86 +342,86 @@ model Sport {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  events      Event[]
-  templates   FormTemplate[]
+  events    Event[]
+  templates FormTemplate[]
 
   @@index([isActive, sortOrder])
 }
 
 model FormTemplate {
-  id            String     @id @default(cuid())
-  sportId       String
-  name          String
-  slug          String
-  description   String?
-  isSystem      Boolean    @default(false)
-  isActive      Boolean    @default(true)
-  allowEOEdit   Boolean    @default(true)
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
+  id          String   @id @default(cuid())
+  sportId     String
+  name        String
+  slug        String
+  description String?
+  isSystem    Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  allowEOEdit Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  sport         Sport      @relation(fields: [sportId], references: [id], onDelete: Restrict)
-  versions      FormVersion[]
-  eventForms    EventForm[]
+  sport      Sport         @relation(fields: [sportId], references: [id], onDelete: Restrict)
+  versions   FormVersion[]
+  eventForms EventForm[]
 
   @@unique([sportId, slug])
   @@index([sportId, isActive])
 }
 
 model FormVersion {
-  id             String      @id @default(cuid())
+  id             String     @id @default(cuid())
   formTemplateId String
   version        Int
-  status         FormStatus  @default(DRAFT)
+  status         FormStatus @default(DRAFT)
   publishedAt    DateTime?
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
 
-  template       FormTemplate @relation(fields: [formTemplateId], references: [id], onDelete: Cascade)
-  fields         FormField[]
-  rules          FormRule[]
-  eventForms     EventForm[]
+  template   FormTemplate @relation(fields: [formTemplateId], references: [id], onDelete: Cascade)
+  fields     FormField[]
+  rules      FormRule[]
+  eventForms EventForm[]
 
   @@unique([formTemplateId, version])
   @@index([formTemplateId, status])
 }
 
 model FormField {
-  id              String         @id @default(cuid())
-  formVersionId   String
-  key             String
-  label           String
-  description     String?
-  fieldType       FormFieldType
-  placeholder     String?
-  defaultValue    Json?
-  validation      Json?
-  order           Int            @default(0)
-  isRequired      Boolean        @default(false)
-  isSystem        Boolean        @default(false)
-  isEditableByEO  Boolean        @default(true)
-  isVisible       Boolean        @default(true)
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
+  id             String        @id @default(cuid())
+  formVersionId  String
+  key            String
+  label          String
+  description    String?
+  fieldType      FormFieldType
+  placeholder    String?
+  defaultValue   Json?
+  validation     Json?
+  order          Int           @default(0)
+  isRequired     Boolean       @default(false)
+  isSystem       Boolean       @default(false)
+  isEditableByEO Boolean       @default(true)
+  isVisible      Boolean       @default(true)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 
-  formVersion     FormVersion    @relation(fields: [formVersionId], references: [id], onDelete: Cascade)
-  options         FormFieldOption[]
-  targetRules     FormRule[]      @relation("RuleTargetField")
-  conditionRules  FormRule[]      @relation("RuleConditionField")
-  eventOverrides  EventFormField[]
-  responses       ParticipantResponse[]
+  formVersion    FormVersion           @relation(fields: [formVersionId], references: [id], onDelete: Cascade)
+  options        FormFieldOption[]
+  targetRules    FormRule[]            @relation("RuleTargetField")
+  conditionRules FormRule[]            @relation("RuleConditionField")
+  eventOverrides EventFormField[]
+  responses      ParticipantResponse[]
 
   @@unique([formVersionId, key])
   @@index([formVersionId, order])
 }
 
 model FormFieldOption {
-  id          String    @id @default(cuid())
+  id          String  @id @default(cuid())
   formFieldId String
   label       String
   value       String
-  order       Int       @default(0)
-  isActive    Boolean   @default(true)
+  order       Int     @default(0)
+  isActive    Boolean @default(true)
 
   formField FormField @relation(fields: [formFieldId], references: [id], onDelete: Cascade)
 
@@ -424,19 +430,19 @@ model FormFieldOption {
 }
 
 model FormRule {
-  id                 String            @id @default(cuid())
-  formVersionId      String
-  conditionFieldId   String
-  operator           FormRuleOperator
-  comparisonValue    Json?
-  targetFieldId      String
-  action             FormRuleAction
-  priority           Int               @default(0)
-  createdAt          DateTime          @default(now())
+  id               String           @id @default(cuid())
+  formVersionId    String
+  conditionFieldId String
+  operator         FormRuleOperator
+  comparisonValue  Json?
+  targetFieldId    String
+  action           FormRuleAction
+  priority         Int              @default(0)
+  createdAt        DateTime         @default(now())
 
-  formVersion      FormVersion @relation(fields: [formVersionId], references: [id], onDelete: Cascade)
-  conditionField   FormField   @relation("RuleConditionField", fields: [conditionFieldId], references: [id], onDelete: Cascade)
-  targetField      FormField   @relation("RuleTargetField", fields: [targetFieldId], references: [id], onDelete: Cascade)
+  formVersion    FormVersion @relation(fields: [formVersionId], references: [id], onDelete: Cascade)
+  conditionField FormField   @relation("RuleConditionField", fields: [conditionFieldId], references: [id], onDelete: Cascade)
+  targetField    FormField   @relation("RuleTargetField", fields: [targetFieldId], references: [id], onDelete: Cascade)
 
   @@index([formVersionId, priority])
   @@index([conditionFieldId])
@@ -444,48 +450,48 @@ model FormRule {
 }
 
 model EventForm {
-  id             String      @id @default(cuid())
-  eventId        String      @unique
-  formTemplateId String?
-  formVersionId  String?
-  name           String
-  status         FormStatus  @default(DRAFT)
-  allowParticipantEdit Boolean @default(true)
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
+  id                   String     @id @default(cuid())
+  eventId              String     @unique
+  formTemplateId       String?
+  formVersionId        String?
+  name                 String
+  status               FormStatus @default(DRAFT)
+  allowParticipantEdit Boolean    @default(true)
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
 
-  event          Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  template       FormTemplate? @relation(fields: [formTemplateId], references: [id], onDelete: SetNull)
-  version        FormVersion?  @relation(fields: [formVersionId], references: [id], onDelete: SetNull)
-  fields         EventFormField[]
-  responses      ParticipantResponse[]
+  event     Event                 @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  template  FormTemplate?         @relation(fields: [formTemplateId], references: [id], onDelete: SetNull)
+  version   FormVersion?          @relation(fields: [formVersionId], references: [id], onDelete: SetNull)
+  fields    EventFormField[]
+  responses ParticipantResponse[]
 
   @@index([formTemplateId])
   @@index([formVersionId])
 }
 
 model EventFormField {
-  id                 String   @id @default(cuid())
-  eventFormId        String
-  sourceFieldId      String?
-  key                String
-  label              String
-  fieldType          FormFieldType
-  description        String?
-  placeholder        String?
-  defaultValue       Json?
-  validation         Json?
-  order              Int      @default(0)
-  isRequired         Boolean  @default(false)
-  isVisible          Boolean  @default(true)
-  isEditableByEO     Boolean  @default(true)
-  isCustom            Boolean  @default(false)
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  id             String        @id @default(cuid())
+  eventFormId    String
+  sourceFieldId  String?
+  key            String
+  label          String
+  fieldType      FormFieldType
+  description    String?
+  placeholder    String?
+  defaultValue   Json?
+  validation     Json?
+  order          Int           @default(0)
+  isRequired     Boolean       @default(false)
+  isVisible      Boolean       @default(true)
+  isEditableByEO Boolean       @default(true)
+  isCustom       Boolean       @default(false)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 
-  eventForm          EventForm  @relation(fields: [eventFormId], references: [id], onDelete: Cascade)
-  sourceField        FormField? @relation(fields: [sourceFieldId], references: [id], onDelete: SetNull)
-  responses          ParticipantResponse[]
+  eventForm   EventForm             @relation(fields: [eventFormId], references: [id], onDelete: Cascade)
+  sourceField FormField?            @relation(fields: [sourceFieldId], references: [id], onDelete: SetNull)
+  responses   ParticipantResponse[]
 
   @@unique([eventFormId, key])
   @@index([eventFormId, order])
@@ -496,17 +502,17 @@ model EventFormField {
 // ======================================================
 
 model Event {
-  id             String       @id @default(cuid())
+  id             String      @id @default(cuid())
   organizationId String?
   eoId           String?
   sportId        String?
   title          String
-  slug           String?      @unique
-  category       String?      // Legacy compatibility; Sport is the canonical classification.
+  slug           String?     @unique
+  category       String? // Legacy compatibility; Sport is the canonical classification.
   description    String
   date           DateTime
   endDate        DateTime?
-  timezone       String       @default("Asia/Jakarta")
+  timezone       String      @default("Asia/Jakarta")
   location       String
   mapsUrl        String?
   imageUrl       String?
@@ -515,26 +521,26 @@ model Event {
   contactName    String?
   contactPhone   String?
   customFields   Json?
-  status         EventStatus  @default(DRAFT)
-  isPublished    Boolean      @default(false) // Legacy compatibility.
+  status         EventStatus @default(DRAFT)
+  isPublished    Boolean     @default(false) // Legacy compatibility.
   publishedAt    DateTime?
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
 
-  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
-  eo             User?         @relation("EOEvents", fields: [eoId], references: [id], onDelete: SetNull)
-  sport          Sport?        @relation(fields: [sportId], references: [id], onDelete: SetNull)
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  eo           User?         @relation("EOEvents", fields: [eoId], references: [id], onDelete: SetNull)
+  sport        Sport?        @relation(fields: [sportId], references: [id], onDelete: SetNull)
 
-  categories     TicketCategory[]
-  promoCodes     PromoCode[]
-  addons         Addon[]
-  eventForm      EventForm?
-  orders         Order[]
-  tickets        Ticket[]
-  ticketScans    TicketScan[]
-  checkIns       CheckIn[]
-  participants   ParticipantEvent[]
-  settlements    Settlement[]
+  categories   TicketCategory[]
+  promoCodes   PromoCode[]
+  addons       Addon[]
+  eventForm    EventForm?
+  orders       Order[]
+  tickets      Ticket[]
+  ticketScans  TicketScan[]
+  checkIns     CheckIn[]
+  participants ParticipantEvent[]
+  settlements  Settlement[]
 
   @@index([organizationId, status])
   @@index([eoId, status])
@@ -544,7 +550,7 @@ model Event {
 }
 
 model TicketCategory {
-  id              String       @id @default(cuid())
+  id              String    @id @default(cuid())
   eventId         String
   name            String
   price           Float
@@ -552,45 +558,45 @@ model TicketCategory {
   elevation       String?
   cot             String?
   description     String?
-  requireApproval Boolean      @default(false)
+  requireApproval Boolean   @default(false)
   saleStartsAt    DateTime?
   saleEndsAt      DateTime?
-  isActive        Boolean      @default(true)
-  sortOrder       Int          @default(0)
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+  isActive        Boolean   @default(true)
+  sortOrder       Int       @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
-  event           Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  tickets         Ticket[]
-  orders          Order[]      @relation("LegacyOrderCategory")
-  orderItems      OrderItem[]
+  event      Event       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  tickets    Ticket[]
+  orders     Order[]     @relation("LegacyOrderCategory")
+  orderItems OrderItem[]
 
   @@index([eventId, isActive, sortOrder])
 }
 
 model PromoCode {
-  id            String         @id @default(cuid())
-  eventId        String
-  code          String         @unique
+  id            String       @id @default(cuid())
+  eventId       String
+  code          String       @unique
   discountType  DiscountType
   discountValue Float
   maxUses       Int?
-  usedCount     Int            @default(0)
-  validFrom     DateTime       @default(now())
+  usedCount     Int          @default(0)
+  validFrom     DateTime     @default(now())
   validUntil    DateTime
-  isActive      Boolean        @default(true)
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  isActive      Boolean      @default(true)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
 
-  event         Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  orders        Order[]
+  event  Event   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  orders Order[]
 
   @@index([eventId, isActive])
   @@index([validFrom, validUntil])
 }
 
 model Addon {
-  id          String      @id @default(cuid())
+  id          String    @id @default(cuid())
   eventId     String
   type        AddonType
   name        String
@@ -598,11 +604,11 @@ model Addon {
   capacity    Int?
   description String?
   imageUrl    String?
-  isActive    Boolean     @default(true)
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
-  event       Event       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  event       Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
   addonOrders AddonOrder[]
   orderItems  OrderItem[]
 
@@ -614,36 +620,36 @@ model Addon {
 // ======================================================
 
 model Participant {
-  id                  String               @id @default(cuid())
-  userId              String?              @unique
-  fullName            String
-  email               String
-  phone               String
-  dateOfBirth         DateTime?
-  gender              String?
-  bloodType           String?
-  emergencyContact    Json?
-  profilePhotoUrl     String?
-  createdAt           DateTime             @default(now())
-  updatedAt           DateTime             @updatedAt
+  id               String    @id @default(cuid())
+  userId           String?   @unique
+  fullName         String
+  email            String
+  phone            String
+  dateOfBirth      DateTime?
+  gender           String?
+  bloodType        String?
+  emergencyContact Json?
+  profilePhotoUrl  String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
-  user                User?                @relation(fields: [userId], references: [id], onDelete: SetNull)
-  events              ParticipantEvent[]
-  responses           ParticipantResponse[]
-  orders              Order[]              @relation("ParticipantOrders")
-  orderItems          OrderItem[]
-  tickets             Ticket[]             @relation("ParticipantTickets")
-  checkIns            CheckIn[]
+  user       User?                 @relation(fields: [userId], references: [id], onDelete: SetNull)
+  events     ParticipantEvent[]
+  responses  ParticipantResponse[]
+  orders     Order[]               @relation("ParticipantOrders")
+  orderItems OrderItem[]
+  tickets    Ticket[]              @relation("ParticipantTickets")
+  checkIns   CheckIn[]
 
   @@index([email])
   @@index([phone])
 }
 
 model ParticipantEvent {
-  id            String       @id @default(cuid())
-  participantId String
-  eventId       String
-  registeredAt  DateTime     @default(now())
+  id             String         @id @default(cuid())
+  participantId  String
+  eventId        String
+  registeredAt   DateTime       @default(now())
   approvalStatus ApprovalStatus @default(NONE)
 
   participant Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
@@ -654,19 +660,19 @@ model ParticipantEvent {
 }
 
 model ParticipantResponse {
-  id              String         @id @default(cuid())
-  participantId   String
-  eventFormId     String
-  formFieldId     String?
+  id               String   @id @default(cuid())
+  participantId    String
+  eventFormId      String
+  formFieldId      String?
   eventFormFieldId String?
-  value           Json?
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
+  value            Json?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
-  participant     Participant    @relation(fields: [participantId], references: [id], onDelete: Cascade)
-  eventForm       EventForm      @relation(fields: [eventFormId], references: [id], onDelete: Cascade)
-  formField       FormField?     @relation(fields: [formFieldId], references: [id], onDelete: SetNull)
-  eventFormField  EventFormField? @relation(fields: [eventFormFieldId], references: [id], onDelete: SetNull)
+  participant    Participant     @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  eventForm      EventForm       @relation(fields: [eventFormId], references: [id], onDelete: Cascade)
+  formField      FormField?      @relation(fields: [formFieldId], references: [id], onDelete: SetNull)
+  eventFormField EventFormField? @relation(fields: [eventFormFieldId], references: [id], onDelete: SetNull)
 
   @@unique([participantId, eventFormId, eventFormFieldId])
   @@index([eventFormId, participantId])
@@ -678,47 +684,48 @@ model ParticipantResponse {
 // ======================================================
 
 model Order {
-  id                 String         @id @default(cuid())
-  orderNumber        String         @unique @default(cuid())
-  eventId            String
-  buyerUserId        String?
-  participantId      String?
+  id            String  @id @default(cuid())
+  orderNumber   String  @unique @default(cuid())
+  eventId       String
+  buyerUserId   String?
+  participantId String?
 
   // Legacy checkout fields kept temporarily for compatibility/migration.
-  fullName           String?
-  email              String?
-  phone              String?
-  jerseySize         JerseySize?
-  bloodType          String?
-  emergencyContact   String?
-  customAnswers      Json?
-  ticketCategoryId   String?
-  promoCodeId        String?
+  fullName         String?
+  email            String?
+  phone            String?
+  jerseySize       JerseySize?
+  bloodType        String?
+  emergencyContact String?
+  customAnswers    Json?
+  ticketCategoryId String?
+  promoCodeId      String?
 
-  subtotal            Float        @default(0)
-  discountTotal       Float        @default(0)
-  addonTotal          Float        @default(0)
-  totalPrice          Float        @default(0)
-  currency            String       @default("IDR")
-  status              OrderStatus  @default(PENDING_PAYMENT)
-  approvalStatus      ApprovalStatus @default(NONE)
-  isClaimed           Boolean      @default(false) // Legacy racepack claim compatibility.
-  expiresAt           DateTime?
-  paidAt              DateTime?
-  cancelledAt         DateTime?
-  createdAt           DateTime     @default(now())
-  updatedAt           DateTime     @updatedAt
+  subtotal       Float          @default(0)
+  discountTotal  Float          @default(0)
+  addonTotal     Float          @default(0)
+  totalPrice     Float          @default(0)
+  currency       String         @default("IDR")
+  status         OrderStatus    @default(PENDING_PAYMENT)
+  approvalStatus ApprovalStatus @default(NONE)
+  isClaimed      Boolean        @default(false) // Legacy racepack claim compatibility.
+  expiresAt      DateTime?
+  paidAt         DateTime?
+  cancelledAt    DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
 
-  event               Event          @relation(fields: [eventId], references: [id], onDelete: Restrict)
-  buyer               User?          @relation("BuyerOrders", fields: [buyerUserId], references: [id], onDelete: SetNull)
-  participant         Participant?   @relation("ParticipantOrders", fields: [participantId], references: [id], onDelete: SetNull)
-  ticketCategory      TicketCategory? @relation("LegacyOrderCategory", fields: [ticketCategoryId], references: [id], onDelete: SetNull)
-  promoCode           PromoCode?     @relation(fields: [promoCodeId], references: [id], onDelete: SetNull)
-  items               OrderItem[]
-  payments            Payment[]
-  transactions        Transaction[]
-  tickets             Ticket[]
-  addonOrders         AddonOrder[]
+  event            Event             @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  buyer            User?             @relation("BuyerOrders", fields: [buyerUserId], references: [id], onDelete: SetNull)
+  participant      Participant?      @relation("ParticipantOrders", fields: [participantId], references: [id], onDelete: SetNull)
+  ticketCategory   TicketCategory?   @relation("LegacyOrderCategory", fields: [ticketCategoryId], references: [id], onDelete: SetNull)
+  promoCode        PromoCode?        @relation(fields: [promoCodeId], references: [id], onDelete: SetNull)
+  items            OrderItem[]
+  payments         Payment[]
+  transactions     Transaction[]
+  tickets          Ticket[]
+  addonOrders      AddonOrder[]
+  paymentRetryLock PaymentRetryLock?
 
   @@index([eventId, status])
   @@index([buyerUserId, createdAt])
@@ -728,24 +735,24 @@ model Order {
 }
 
 model OrderItem {
-  id               String          @id @default(cuid())
+  id               String   @id @default(cuid())
   orderId          String
   participantId    String?
   ticketCategoryId String?
   addonId          String?
   itemType         String
   name             String
-  quantity         Int             @default(1)
+  quantity         Int      @default(1)
   unitPrice        Float
   totalPrice       Float
   metadata         Json?
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
-  order            Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  participant      Participant?    @relation(fields: [participantId], references: [id], onDelete: SetNull)
-  ticketCategory   TicketCategory? @relation(fields: [ticketCategoryId], references: [id], onDelete: SetNull)
-  addon            Addon?          @relation(fields: [addonId], references: [id], onDelete: SetNull)
+  order          Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  participant    Participant?    @relation(fields: [participantId], references: [id], onDelete: SetNull)
+  ticketCategory TicketCategory? @relation(fields: [ticketCategoryId], references: [id], onDelete: SetNull)
+  addon          Addon?          @relation(fields: [addonId], references: [id], onDelete: SetNull)
 
   @@index([orderId])
   @@index([participantId])
@@ -764,15 +771,15 @@ model Payment {
   amount                Float
   currency              String         @default("IDR")
   providerTransactionId String?
-  providerResponse     Json?
-  paidAt               DateTime?
-  expiresAt            DateTime?
+  providerResponse      Json?
+  paidAt                DateTime?
+  expiresAt             DateTime?
   createdAt             DateTime       @default(now())
   updatedAt             DateTime       @updatedAt
 
-  order                Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  user                 User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
-  transactions         Transaction[]
+  order        Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  user         User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  transactions Transaction[]
 
   @@index([orderId, status])
   @@index([userId, createdAt])
@@ -780,22 +787,22 @@ model Payment {
 }
 
 model Transaction {
-  id             String        @id @default(cuid())
-  orderId        String?
-  paymentId      String?
-  runnerId       String?       // Legacy participant account link.
-  amount         Float
-  status         String
-  paymentMethod  String?
-  externalId     String?
-  metadata       Json?
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  id            String   @id @default(cuid())
+  orderId       String?
+  paymentId     String?
+  runnerId      String? // Legacy participant account link.
+  amount        Float
+  status        String
+  paymentMethod String?
+  externalId    String?
+  metadata      Json?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  order          Order?        @relation(fields: [orderId], references: [id], onDelete: SetNull)
-  payment        Payment?      @relation(fields: [paymentId], references: [id], onDelete: SetNull)
-  runner         User?         @relation(fields: [runnerId], references: [id], onDelete: SetNull)
-  tickets        Ticket[]
+  order   Order?   @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  payment Payment? @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+  runner  User?    @relation(fields: [runnerId], references: [id], onDelete: SetNull)
+  tickets Ticket[]
 
   @@index([orderId])
   @@index([paymentId])
@@ -812,12 +819,12 @@ model Settlement {
   netAmount      Float            @default(0)
   currency       String           @default("IDR")
   status         SettlementStatus @default(PENDING)
-  scheduledAt   DateTime?
+  scheduledAt    DateTime?
   paidAt         DateTime?
-  reference     String?
-  metadata      Json?
-  createdAt     DateTime          @default(now())
-  updatedAt     DateTime          @updatedAt
+  reference      String?
+  metadata       Json?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   event        Event?       @relation(fields: [eventId], references: [id], onDelete: SetNull)
@@ -834,8 +841,8 @@ model AddonOrder {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  addon     Addon    @relation(fields: [addonId], references: [id], onDelete: Restrict)
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  addon Addon @relation(fields: [addonId], references: [id], onDelete: Restrict)
 
   @@unique([orderId, addonId])
   @@index([addonId])
@@ -846,34 +853,34 @@ model AddonOrder {
 // ======================================================
 
 model Ticket {
-  id              String        @id @default(cuid())
-  ticketNumber    String        @unique @default(cuid())
-  qrCode          String        @unique
-  orderId         String?
-  transactionId   String?
-  eventId         String
-  participantId   String?
-  userId          String?
-  categoryId      String
-  status          TicketStatus  @default(RESERVED)
-  isScanned       Boolean       @default(false) // Legacy compatibility.
-  issuedAt        DateTime?
-  checkedInAt     DateTime?
-  cancelledAt     DateTime?
-  transferredAt  DateTime?
-  metadata       Json?
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
+  id            String       @id @default(cuid())
+  ticketNumber  String       @unique @default(cuid())
+  qrCode        String       @unique
+  orderId       String?
+  transactionId String?
+  eventId       String
+  participantId String?
+  userId        String?
+  categoryId    String
+  status        TicketStatus @default(RESERVED)
+  isScanned     Boolean      @default(false) // Legacy compatibility.
+  issuedAt      DateTime?
+  checkedInAt   DateTime?
+  cancelledAt   DateTime?
+  transferredAt DateTime?
+  metadata      Json?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
 
-  order          Order?         @relation(fields: [orderId], references: [id], onDelete: SetNull)
-  transaction    Transaction?   @relation(fields: [transactionId], references: [id], onDelete: SetNull)
-  event          Event          @relation(fields: [eventId], references: [id], onDelete: Restrict)
-  participant    Participant?   @relation("ParticipantTickets", fields: [participantId], references: [id], onDelete: SetNull)
-  user           User?          @relation("UserTickets", fields: [userId], references: [id], onDelete: SetNull)
-  category       TicketCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  scans          TicketScan[]
-  checkIns       CheckIn[]
-  transfers      TicketTransfer[]
+  order       Order?           @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  transaction Transaction?     @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  event       Event            @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  participant Participant?     @relation("ParticipantTickets", fields: [participantId], references: [id], onDelete: SetNull)
+  user        User?            @relation("UserTickets", fields: [userId], references: [id], onDelete: SetNull)
+  category    TicketCategory   @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  scans       TicketScan[]
+  checkIns    CheckIn[]
+  transfers   TicketTransfer[]
 
   @@index([eventId, status])
   @@index([participantId])
@@ -893,47 +900,47 @@ model TicketScan {
   message     String?
   scannedAt   DateTime         @default(now())
 
-  ticket      Ticket            @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  event       Event             @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  event  Event  @relation(fields: [eventId], references: [id], onDelete: Restrict)
 
   @@index([ticketId, scannedAt])
   @@index([eventId, scannedAt])
 }
 
 model CheckIn {
-  id             String         @id @default(cuid())
-  eventId        String
-  ticketId       String
-  participantId  String?
-  status         CheckInStatus  @default(NOT_CHECKED_IN)
-  checkedInById  String?
-  gate           String?
-  notes          String?
-  checkedInAt    DateTime?
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
+  id            String        @id @default(cuid())
+  eventId       String
+  ticketId      String
+  participantId String?
+  status        CheckInStatus @default(NOT_CHECKED_IN)
+  checkedInById String?
+  gate          String?
+  notes         String?
+  checkedInAt   DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
 
-  event          Event          @relation(fields: [eventId], references: [id], onDelete: Restrict)
-  ticket         Ticket         @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  participant    Participant?   @relation(fields: [participantId], references: [id], onDelete: SetNull)
+  event       Event        @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  ticket      Ticket       @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  participant Participant? @relation(fields: [participantId], references: [id], onDelete: SetNull)
 
   @@unique([eventId, ticketId])
   @@index([eventId, status])
 }
 
 model TicketTransfer {
-  id          String   @id @default(cuid())
-  ticketId    String
-  fromUserId  String?
-  toUserId    String?
-  fromName    String?
-  toName      String?
-  reason      String?
+  id            String   @id @default(cuid())
+  ticketId      String
+  fromUserId    String?
+  toUserId      String?
+  fromName      String?
+  toName        String?
+  reason        String?
   transferredAt DateTime @default(now())
 
-  ticket      Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  fromUser    User?    @relation("TransferFrom", fields: [fromUserId], references: [id], onDelete: SetNull)
-  toUser      User?    @relation("TransferTo", fields: [toUserId], references: [id], onDelete: SetNull)
+  ticket   Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  fromUser User?  @relation("TransferFrom", fields: [fromUserId], references: [id], onDelete: SetNull)
+  toUser   User?  @relation("TransferTo", fields: [toUserId], references: [id], onDelete: SetNull)
 
   @@index([ticketId, transferredAt])
 }
@@ -956,7 +963,7 @@ model AuditLog {
   userAgent   String?
   createdAt   DateTime @default(now())
 
-  actor       User?    @relation("ActorAuditLogs", fields: [actorUserId], references: [id], onDelete: SetNull)
+  actor User? @relation("ActorAuditLogs", fields: [actorUserId], references: [id], onDelete: SetNull)
 
   @@index([actorUserId, createdAt])
   @@index([entityType, entityId])
@@ -964,20 +971,44 @@ model AuditLog {
 }
 
 model AdminAction {
-  id            String   @id @default(cuid())
-  actorUserId   String
-  action        String
-  targetType    String?
-  targetId      String?
-  reason        String?
-  metadata      Json?
-  createdAt     DateTime @default(now())
+  id          String   @id @default(cuid())
+  actorUserId String
+  action      String
+  targetType  String?
+  targetId    String?
+  reason      String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
 
-  actor         User     @relation("AdminActorActions", fields: [actorUserId], references: [id], onDelete: Restrict)
+  actor User @relation("AdminActorActions", fields: [actorUserId], references: [id], onDelete: Restrict)
 
   @@index([actorUserId, createdAt])
   @@index([targetType, targetId])
   @@index([action, createdAt])
+}
+
+model RateLimitBucket {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  count       Int      @default(0)
+  windowStart DateTime
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([expiresAt])
+  @@index([windowStart])
+}
+
+model PaymentRetryLock {
+  id        String   @id @default(cuid())
+  orderId   String   @unique
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
 }
 
 model SystemSetting {
@@ -991,4 +1022,26 @@ model SystemSetting {
   updatedAt   DateTime @updatedAt
 
   @@index([isPublic])
+}
+
+model QualificationReview {
+  id                    String                    @id @default(cuid())
+  participantResponseId String                    @unique
+  participantId         String
+  eventId               String
+  eventFormId           String
+  eventFormFieldId      String
+  status                QualificationReviewStatus @default(PENDING)
+  reviewedByUserId      String?
+  reviewedAt            DateTime?
+  rejectionReason       String?
+  notes                 String?
+  metadata              Json?
+  createdAt             DateTime                  @default(now())
+  updatedAt             DateTime                  @updatedAt
+
+  @@index([eventId, status])
+  @@index([participantId, eventId])
+  @@index([eventFormId, eventFormFieldId])
+  @@index([reviewedByUserId])
 }

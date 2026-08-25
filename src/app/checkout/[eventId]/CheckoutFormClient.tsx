@@ -73,6 +73,10 @@ export default function CheckoutFormClient({
   const [paymentSessions, setPaymentSessions] = useState<
     CheckoutPaymentSession[]
   >([]);
+  const [retryingPaymentOrderId, setRetryingPaymentOrderId] =
+    useState<string | null>(null);
+  const [paymentUxMessage, setPaymentUxMessage] =
+    useState<string | null>(null);
 
   // =========================================================================
   // LOGIKA: KALKULASI HARGA & JUMLAH
@@ -196,6 +200,85 @@ export default function CheckoutFormClient({
   // =========================================================================
   // LOGIKA: VALIDASI & SUBMIT PESANAN
   // =========================================================================
+  const handleRetryPayment = async (
+    orderId: string,
+  ) => {
+    if (!orderId) {
+      return;
+    }
+
+    setRetryingPaymentOrderId(orderId);
+    setPaymentUxMessage(null);
+
+    try {
+      const response = await fetch(
+        `/api/orders/${orderId}/payment/retry`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        },
+      );
+
+      const data = (await response.json()) as {
+        success?: boolean;
+        error?: string;
+        data?: {
+          orderId: string;
+          externalId: string;
+          provider: string;
+          status: string;
+          checkoutUrl: string | null;
+          token: string | null;
+          expiresAt: string | null;
+        };
+      };
+
+      if (
+        !response.ok ||
+        !data.success ||
+        !data.data
+      ) {
+        throw new Error(
+          data.error ??
+            "Sesi pembayaran belum dapat dibuat ulang.",
+        );
+      }
+
+      setPaymentSessions((current) =>
+        current.map((session) =>
+          session.orderId ===
+          data.data!.orderId
+            ? {
+                ...session,
+                externalId:
+                  data.data!.externalId,
+                checkoutUrl:
+                  data.data!.checkoutUrl,
+                status:
+                  data.data!.status,
+                expiresAt:
+                  data.data!.expiresAt,
+              }
+            : session,
+        ),
+      );
+
+      setPaymentUxMessage(
+        "Sesi pembayaran berhasil dibuat ulang.",
+      );
+    } catch (error) {
+      setPaymentUxMessage(
+        error instanceof Error
+          ? error.message
+          : "Gagal membuat ulang sesi pembayaran.",
+      );
+    } finally {
+      setRetryingPaymentOrderId(null);
+    }
+  };
+
   const handleSubmitOrder = async () => {
     if (!paymentMethod) {
       alert("Silakan pilih metode pembayaran terlebih dahulu!");
@@ -220,7 +303,26 @@ export default function CheckoutFormClient({
       const response = await processCheckout(payload);
 
       if (response.success) {
-        setPaymentSessions(response.paymentSessions);
+        setPaymentSessions(
+          response.paymentSessions,
+        );
+        setPaymentUxMessage(null);
+
+        const primaryOrderId =
+          response.paymentSessions[0]?.orderId ??
+          response.orderIds[0];
+
+        if (primaryOrderId) {
+          router.replace(
+            `/checkout/success?orderId=${encodeURIComponent(
+              primaryOrderId,
+            )}&event=${encodeURIComponent(
+              event.title,
+            )}`,
+          );
+          return;
+        }
+
         setCurrentStep(4);
       } else {
         alert(response.error);
@@ -798,13 +900,18 @@ export default function CheckoutFormClient({
               </div>
 
               <div>
-                <h2 className="text-2xl font-black text-slate-900 mb-2">
-                  Pesanan Berhasil Dibuat
+                <h2 className="text-2xl font-black text-slate-900 mb-2">Pesanan Berhasil Dibuat
                 </h2>
-                <p className="text-slate-500">
-                  Pilih sesi pembayaran di bawah untuk melanjutkan pembayaran.
-                </p>
+                <p className="text-slate-500">Pesanan sudah tercatat. Pembayaran belum selesai sampai transaksi Anda berhasil dikonfirmasi.</p>
               </div>
+
+              {paymentUxMessage && (
+                <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-left">
+                  <p className="text-sm font-semibold text-blue-900">
+                    {paymentUxMessage}
+                  </p>
+                </div>
+              )}
 
               {paymentSessions.length > 0 ? (
                 <div className="space-y-3 text-left">
@@ -827,18 +934,34 @@ export default function CheckoutFormClient({
                         </div>
 
                         {session.checkoutUrl ? (
-                          <a
-                            href={session.checkoutUrl}
-                            className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white transition-all hover:bg-emerald-700"
-                          >
-                            Lanjut ke Pembayaran
-                            <ArrowRight size={18} />
-                          </a>
-                        ) : (
-                          <span className="rounded-xl bg-slate-200 px-4 py-3 text-xs font-bold text-slate-500">
-                            Sesi pembayaran belum tersedia
-                          </span>
-                        )}
+                        <a
+                          href={session.checkoutUrl}
+                          className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white transition-all hover:bg-emerald-700"
+                        >
+                          Lanjutkan Pembayaran
+                          <ArrowRight size={18} />
+                        </a>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleRetryPayment(
+                              session.orderId,
+                            )
+                          }
+                          disabled={
+                            retryingPaymentOrderId ===
+                            session.orderId
+                          }
+                          className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white transition-all hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {retryingPaymentOrderId ===
+                          session.orderId
+                            ? "Menyiapkan Pembayaran..."
+                            : "Coba Lagi"}
+                          <ArrowRight size={18} />
+                        </button>
+                      )}
                       </div>
                     </div>
                   ))}

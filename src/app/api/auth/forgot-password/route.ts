@@ -2,6 +2,12 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import crypto from "crypto";
+import {
+  isResetPasswordDevExposureEnabled,
+} from "@/lib/auth/reset-password-mode";
+import {
+  checkForgotPasswordRateLimit,
+} from "@/lib/security/forgot-password-rate-limit";
 
 export async function POST(req: Request) {
   try {
@@ -11,11 +17,33 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Email wajib diisi" }, { status: 400 });
     }
 
-    const cleanEmail = email.trim().toLowerCase();
+    const cleanEmail =
+      email.trim().toLowerCase();
 
-    const user = await prisma.user.findUnique({
-      where: { email: cleanEmail },
-    });
+    const rateLimitResult =
+      await checkForgotPasswordRateLimit({
+        email: cleanEmail,
+        headers: req.headers,
+      });
+
+    if (
+      !rateLimitResult.allowed
+    ) {
+      return NextResponse.json(
+        {
+          message:
+            "Jika email Anda terdaftar, instruksi reset password telah dikirim.",
+        },
+        { status: 429 },
+      );
+    }
+
+    const user =
+      await prisma.user.findUnique({
+        where: {
+          email: cleanEmail,
+        },
+      });
 
     if (!user) {
       // Keamanan: Tetap berikan respon sukses agar peretas tidak bisa tebak email
@@ -41,15 +69,35 @@ export async function POST(req: Request) {
     const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
     const resetUrl = `${baseUrl}/reset-password?token=${resetToken}`;
 
-    console.log("-----------------------------------------");
-    console.log(`[RESET PASSWORD URL]: ${resetUrl}`);
-    console.log("-----------------------------------------");
 
-    return NextResponse.json({
-      message: "Instruksi reset password berhasil dibuat!",
-      resetToken,
-      resetUrl, // Berguna saat pengujian di localhost / dev
-    });
+    const response: {
+      message: string;
+      resetToken?: string;
+      resetUrl?: string;
+    } = {
+      message:
+        "Instruksi reset password berhasil dibuat!",
+    };
+
+    /*
+     * Token hanya boleh diekspos secara eksplisit pada
+     * environment development yang memang sedang digunakan
+     * untuk debugging lokal.
+     *
+     * Production selalu menolak exposure ini.
+     */
+    if (
+      isResetPasswordDevExposureEnabled()
+    ) {
+      response.resetToken =
+        resetToken;
+      response.resetUrl =
+        resetUrl;
+    }
+
+    return NextResponse.json(
+      response,
+    );
   } catch (error: unknown) {
     console.error("Error forgot password:", error);
     return NextResponse.json(

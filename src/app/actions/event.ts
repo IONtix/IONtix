@@ -4,6 +4,11 @@ import { revalidatePath } from "next/cache";
 import bcrypt from "bcryptjs";
 
 import prisma from "@/lib/prisma";
+import { writeAuditLog } from "@/lib/audit/audit-log";
+import {
+  assertEventCanPublish,
+} from "@/lib/events/lifecycle";
+
 import type {
   CreateEventInput,
 } from "@/lib/platform-types";
@@ -323,10 +328,15 @@ export async function createEvent(
     const formattedCategories = formatCategories(payload.categories);
     const formattedAddons = formatAddons(payload.addons);
 
-    const shouldPublish = false;
-
     const shouldSubmitForReview =
       submissionMode === "SUBMIT_REVIEW";
+
+    // Event baru selalu dibuat sebagai DRAFT terlebih dahulu.
+    // Readiness akan diperiksa sebelum masuk PENDING_REVIEW.
+    if (shouldSubmitForReview) {
+      // Data event belum memiliki ID sebelum create,
+      // sehingga readiness final dilakukan setelah create.
+    }
 
     const newEvent = await prisma.event.create({
       data: {
@@ -350,13 +360,12 @@ export async function createEvent(
         organizationId: membership.organizationId,
         eoId: user.id,
 
-        status: shouldPublish
-          ? "PUBLISHED"
-          : shouldSubmitForReview
-            ? "PENDING_REVIEW"
-            : "DRAFT",
-        isPublished: shouldPublish,
-        publishedAt: shouldPublish ? new Date() : null,
+        // Event baru selalu dibuat sebagai DRAFT.
+        // PENDING_REVIEW hanya boleh diberikan setelah
+        // readiness check berhasil.
+        status: "DRAFT",
+        isPublished: false,
+        publishedAt: null,
 
         categories:
           formattedCategories.length > 0
@@ -368,17 +377,100 @@ export async function createEvent(
       },
     });
 
+    if (shouldSubmitForReview) {
+      try {
+        const readiness =
+          await assertEventCanPublish(
+            newEvent.id,
+          );
+
+        const submittedEvent =
+          await prisma.$transaction(
+            async (tx) => {
+              const result =
+                await tx.event.update({
+                  where: {
+                    id: newEvent.id,
+                  },
+                  data: {
+                    status:
+                      "PENDING_REVIEW",
+                    isPublished: false,
+                    publishedAt: null,
+                  },
+                });
+
+              await writeAuditLog(
+                tx,
+                {
+                  actorUserId:
+                    user.id,
+                  action:
+                    "EVENT_SUBMITTED_FOR_REVIEW",
+                  module: "EVENT",
+                  entityType: "Event",
+                  entityId:
+                    newEvent.id,
+                  beforeData: {
+                    status:
+                      "DRAFT",
+                    isPublished:
+                      false,
+                  },
+                  afterData: {
+                    status:
+                      result.status,
+                    isPublished:
+                      result.isPublished,
+                  },
+                  metadata: {
+                    readinessSummary:
+                      readiness.summary,
+                  },
+                },
+              );
+
+              return result;
+            },
+          );
+
+        revalidatePath("/");
+        revalidatePath("/dashboard");
+        revalidatePath("/dashboard/events");
+        revalidatePath(
+          `/dashboard/events/${newEvent.id}`,
+        );
+
+        return {
+          success: true,
+          message:
+            "Event berhasil dibuat dan diajukan untuk review.",
+          data: submittedEvent,
+        };
+      } catch (error) {
+        revalidatePath(
+          `/dashboard/events/${newEvent.id}`,
+        );
+
+        return {
+          success: false,
+          error:
+            error instanceof Error
+              ? error.message
+              : "Event belum memenuhi persyaratan untuk diajukan.",
+          data: newEvent,
+        };
+      }
+    }
+
     revalidatePath("/");
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/events");
 
     return {
       success: true,
-      message: shouldPublish
-        ? "Event berhasil dibuat dan dipublikasikan."
-        : shouldSubmitForReview
-          ? "Event berhasil dibuat dan menunggu review."
-          : "Draft event berhasil disimpan.",
+      message:
+        "Draft event berhasil disimpan.",
       data: newEvent,
     };
   } catch (error: unknown) {
@@ -703,13 +795,34 @@ export async function updateEvent(
       };
     }
 
-    const wantsToPublish = user.role === "SUPER_ADMIN";
+    const wantsToPublish =
+      user.role === "SUPER_ADMIN";
+
     const wantsReview =
       user.role !== "SUPER_ADMIN" &&
       (
         submissionMode === "SUBMIT_REVIEW" ||
         access.event.status === "PUBLISHED"
       );
+
+    const requiresReadinessCheck =
+      wantsToPublish || wantsReview;
+
+    if (requiresReadinessCheck) {
+      try {
+        await assertEventCanPublish(
+          access.event.id,
+        );
+      } catch (error) {
+        return {
+          success: false,
+          error:
+            error instanceof Error
+              ? error.message
+              : "Event belum siap diproses.",
+        };
+      }
+    }
 
     const updateData: Prisma.EventUpdateInput = {
       title: payload.title?.trim() || access.event.title,

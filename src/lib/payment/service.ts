@@ -130,7 +130,9 @@ export class PaymentService {
       }
 
       throw new PaymentProviderError(
-        "Gagal memverifikasi notifikasi pembayaran.",
+        error instanceof Error
+          ? error.message
+          : "Gagal memverifikasi notifikasi pembayaran.",
         providerName,
         error,
       );

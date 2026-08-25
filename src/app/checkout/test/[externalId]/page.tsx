@@ -2,6 +2,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import prisma from "@/lib/prisma";
 
+import {
+  createIontixTestCapability,
+} from "@/lib/payment/test-capability";
+
 import TestPaymentActions from "./TestPaymentActions";
 
 interface TestPaymentPageProps {
@@ -57,9 +61,17 @@ export default async function TestPaymentPage({
     notFound();
   }
 
+  const safeExternalId =
+    payment.externalId ??
+    externalId;
+
+  const testCapability =
+    createIontixTestCapability(
+      safeExternalId,
+    );
+
   const ticketCategoryName = payment.order.ticketCategory?.name ?? "Tiket";
 
-  const safeExternalId = payment.externalId ?? externalId;
 
   const formattedAmount = new Intl.NumberFormat("id-ID", {
     style: "currency",
@@ -207,6 +219,7 @@ export default async function TestPaymentPage({
 
             <TestPaymentActions
               externalId={safeExternalId}
+              capability={testCapability}
               amount={payment.amount}
               currency={payment.currency}
               initialStatus={payment.status}

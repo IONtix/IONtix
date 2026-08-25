@@ -4,6 +4,8 @@ import prisma from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import { requireEventPermission } from "@/lib/auth/organization";
 import { getEventStatusMeta } from "@/lib/events/status";
+import { requireAuth } from "@/lib/auth/authorization";
+import EventPublishControl from "./_components/EventPublishControl";
 import {
   ChevronLeft,
   Edit3,
@@ -29,6 +31,8 @@ export default async function EventDetailPage({
     eventId,
     "events.manage",
   );
+
+  const user = await requireAuth();
 
   // Ambil detail event beserta relasinya
   const event = await prisma.event.findUnique({
@@ -206,6 +210,12 @@ export default async function EventDetailPage({
         </div>
 
         {/* MAIN CONTENT GRID */}
+        <EventPublishControl
+          eventId={event.id}
+          status={event.status}
+          role={user.role}
+        />
+
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           {/* KOLOM KIRI (7 KOLOM) */}
           <div className="lg:col-span-7 space-y-8">

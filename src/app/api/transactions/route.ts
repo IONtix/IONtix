@@ -420,7 +420,6 @@ export async function GET(request: Request) {
               eventId: true,
               fullName: true,
               email: true,
-              phone: true,
               status: true,
               approvalStatus: true,
               totalPrice: true,
@@ -432,30 +431,16 @@ export async function GET(request: Request) {
                 },
               },
 
-              participant: {
-                select: {
-                  id: true,
-                  fullName: true,
-                  email: true,
-                },
-              },
             },
           },
 
           payment: {
             select: {
-              id: true,
-              externalId: true,
               provider: true,
               method: true,
               status: true,
-              amount: true,
               currency: true,
-              providerTransactionId: true,
               paidAt: true,
-              expiresAt: true,
-              createdAt: true,
-              updatedAt: true,
             },
           },
 
@@ -598,27 +583,15 @@ export async function GET(request: Request) {
                 email:
                   transaction.order
                     .email,
-                phone:
-                  transaction.order
-                    .phone,
               },
 
               event:
                 transaction.order.event,
-
-              participant:
-                transaction.order
-                  .participant,
             }
           : null,
 
         payment: transaction.payment
           ? {
-              id: transaction.payment.id,
-              externalId:
-                transaction.payment
-                  .externalId,
-
               provider:
                 transaction.payment
                   .provider,
@@ -631,33 +604,13 @@ export async function GET(request: Request) {
                 transaction.payment
                   .status,
 
-              amount:
-                transaction.payment
-                  .amount,
-
               currency:
                 transaction.payment
                   .currency,
 
-              providerTransactionId:
-                transaction.payment
-                  .providerTransactionId,
-
               paidAt:
                 transaction.payment
                   .paidAt,
-
-              expiresAt:
-                transaction.payment
-                  .expiresAt,
-
-              createdAt:
-                transaction.payment
-                  .createdAt,
-
-              updatedAt:
-                transaction.payment
-                  .updatedAt,
             }
           : null,
 

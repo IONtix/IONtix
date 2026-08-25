@@ -110,7 +110,11 @@ export default function CekTiketPage() {
 
                 {/* INI BAGIAN YANG DIPERBARUI: href sudah diarahkan ke URL e-ticket */}
                 <Link
-                  href={`/e-ticket/${order.id}`}
+                  href={
+                    order.tickets?.[0]?.id
+                      ? `/ticket/${order.tickets[0].id}`
+                      : "#"
+                  }
                   className="w-full md:w-auto"
                 >
                   <Button

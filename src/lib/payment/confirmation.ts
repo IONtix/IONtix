@@ -8,6 +8,9 @@ import {
   TicketStatus,
   Prisma,
 } from "@/generated/prisma/client";
+import {
+  ticketStatusForPaymentLifecycle,
+} from "@/lib/ticket/lifecycle";
 
 export interface ConfirmPaymentInput {
   externalId: string;
@@ -145,32 +148,55 @@ export async function confirmPayment(
           : null;
 
       if (!alreadyFinal) {
-        const updateResult = await tx.payment.updateMany({
-          where: {
-            id: payment.id,
-            status: {
-              in: [
-                PaymentStatus.PENDING,
-                PaymentStatus.AUTHORIZED,
-                PaymentStatus.SETTLEMENT,
-              ],
+        const isPostPaymentRefundTransition =
+          normalizedStatus === PaymentStatus.REFUNDED ||
+          normalizedStatus === PaymentStatus.PARTIALLY_REFUNDED;
+
+        /*
+         * Refund / partial refund adalah transisi sah
+         * setelah payment SUCCESS.
+         *
+         * State lain tetap tidak boleh menurunkan payment
+         * SUCCESS karena stale callback protection.
+         */
+        const allowedStatuses = [
+          PaymentStatus.PENDING,
+          PaymentStatus.AUTHORIZED,
+          PaymentStatus.SETTLEMENT,
+          ...(isPostPaymentRefundTransition
+            ? [PaymentStatus.SUCCESS]
+            : []),
+        ];
+
+        const updateResult =
+          await tx.payment.updateMany({
+            where: {
+              id: payment.id,
+              status: {
+                in: allowedStatuses,
+              },
             },
-          },
-          data: {
-            status: normalizedStatus,
-            providerTransactionId:
-              input.providerTransactionId ??
-              payment.providerTransactionId ??
-              null,
-            providerResponse: toJsonValue(input.providerResponse),
-            paidAt,
-            expiresAt: input.expiresAt ?? payment.expiresAt ?? null,
-          },
-        });
+            data: {
+              status: normalizedStatus,
+              providerTransactionId:
+                input.providerTransactionId ??
+                payment.providerTransactionId ??
+                null,
+              providerResponse: toJsonValue(
+                input.providerResponse,
+              ),
+              paidAt,
+              expiresAt:
+                input.expiresAt ??
+                payment.expiresAt ??
+                null,
+            },
+          });
 
         /*
          * Jika tidak ada row yang berubah, cek apakah payment
-         * sudah diproses oleh request lain.
+         * sudah diproses oleh request lain atau callback yang sama
+         * sudah pernah diterapkan.
          */
         if (updateResult.count === 0) {
           const latest = await tx.payment.findUnique({
@@ -211,29 +237,85 @@ export async function confirmPayment(
             );
 
           if (isStaleAfterSuccess) {
-            const currentTickets = await tx.ticket.findMany({
-              where: {
-                orderId: order.id,
-              },
-              select: {
-                id: true,
-              },
-            });
+            const currentTickets =
+              await tx.ticket.findMany({
+                where: {
+                  orderId: order.id,
+                },
+                select: {
+                  id: true,
+                },
+              });
 
             return {
               success: true,
               paymentId: latest.id,
               orderId: order.id,
-              paymentStatus: PaymentStatus.SUCCESS,
-              orderStatus: OrderStatus.PAID,
-              ticketIds: currentTickets.map((ticket) => ticket.id),
+              paymentStatus:
+                PaymentStatus.SUCCESS,
+              orderStatus:
+                OrderStatus.PAID,
+              ticketIds:
+                currentTickets.map(
+                  (ticket) =>
+                    ticket.id,
+                ),
+              alreadyProcessed: true,
+            };
+          }
+
+          /*
+           * Idempotency untuk callback REFUNDED /
+           * PARTIALLY_REFUNDED yang sama.
+           *
+           * Callback kedua tidak boleh dianggap sebagai
+           * concurrent conflict.
+           */
+          const isAlreadyAppliedPostPaymentTransition =
+            (normalizedStatus ===
+              PaymentStatus.REFUNDED ||
+              normalizedStatus ===
+                PaymentStatus.PARTIALLY_REFUNDED) &&
+            latest.status ===
+              normalizedStatus;
+
+          if (
+            isAlreadyAppliedPostPaymentTransition
+          ) {
+            const currentTickets =
+              await tx.ticket.findMany({
+                where: {
+                  orderId: order.id,
+                },
+                select: {
+                  id: true,
+                },
+              });
+
+            return {
+              success: true,
+              paymentId: latest.id,
+              orderId: order.id,
+              paymentStatus:
+                latest.status,
+              orderStatus:
+                mapOrderStatus(
+                  latest.status,
+                ),
+              ticketIds:
+                currentTickets.map(
+                  (ticket) =>
+                    ticket.id,
+                ),
               alreadyProcessed: true,
             };
           }
 
           if (
-            latest.status !== PaymentStatus.SUCCESS ||
-            normalizedStatus !== PaymentStatus.SUCCESS
+            latest.status !==
+              PaymentStatus.SUCCESS ||
+            normalizedStatus !==
+              PaymentStatus.SUCCESS
           ) {
             throw new Error(
               "Status payment berubah oleh proses lain. Silakan coba lagi.",
@@ -267,6 +349,50 @@ export async function confirmPayment(
             normalizedStatus === PaymentStatus.SUCCESS ? paidAt : order.paidAt,
         },
       });
+
+      /*
+       * Payment REFUNDED adalah lifecycle transition pasca-payment.
+       * Ticket ACTIVE yang terkait order diubah menjadi REFUNDED
+       * dalam transaction yang sama dengan perubahan payment/order.
+       *
+       * Partial refund sengaja tidak mengubah ticket otomatis
+       * karena belum ada policy pembagian refund per ticket.
+       */
+      if (
+        normalizedStatus === PaymentStatus.REFUNDED
+      ) {
+        const tickets =
+          await tx.ticket.findMany({
+            where: {
+              orderId: order.id,
+            },
+            select: {
+              id: true,
+              status: true,
+            },
+          });
+
+        for (const ticket of tickets) {
+          const nextStatus =
+            ticketStatusForPaymentLifecycle(
+              normalizedStatus,
+              ticket.status,
+            );
+
+          if (!nextStatus) {
+            continue;
+          }
+
+          await tx.ticket.update({
+            where: {
+              id: ticket.id,
+            },
+            data: {
+              status: nextStatus,
+            },
+          });
+        }
+      }
 
       /*
        * Selalu sinkronkan transaction yang terkait payment.

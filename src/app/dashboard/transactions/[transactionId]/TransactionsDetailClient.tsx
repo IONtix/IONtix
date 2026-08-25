@@ -54,7 +54,6 @@ interface TransactionDetailResponse {
     } | null;
 
     order: {
-      id: string;
       orderNumber: string;
       status: string;
       approvalStatus: string;
@@ -62,28 +61,15 @@ interface TransactionDetailResponse {
       discountTotal: number;
       addonTotal: number;
       totalPrice: number;
-      currency: string;
       isClaimed: boolean;
-      expiresAt: string | null;
-      paidAt: string | null;
-      cancelledAt: string | null;
-      createdAt: string;
-      updatedAt: string;
     } | null;
 
     payment: {
-      id: string;
-      externalId: string;
       provider: string;
       method: string | null;
       status: string;
-      amount: number;
-      currency: string;
       providerTransactionId: string | null;
       paidAt: string | null;
-      expiresAt: string | null;
-      createdAt: string;
-      updatedAt: string;
     } | null;
 
     tickets: Array<{

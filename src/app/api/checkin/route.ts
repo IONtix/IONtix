@@ -6,6 +6,7 @@ import {
   requireAuth,
 } from "@/lib/auth/authorization";
 import { requireEventPermission } from "@/lib/auth/organization";
+import { evaluateCheckInEligibility } from "@/lib/checkin/rules";
 
 export async function POST(request: Request) {
   try {
@@ -177,133 +178,79 @@ export async function POST(request: Request) {
           },
         });
 
-        if (
-          existingCheckIn?.status === "CHECKED_IN" ||
-          lockedTicket.isScanned ||
-          lockedTicket.checkedInAt
-        ) {
+        const eligibility =
+          evaluateCheckInEligibility({
+            ticketStatus:
+              lockedTicket.status,
+            eventStatus:
+              lockedTicket.event.status,
+            eventIsPublished:
+              lockedTicket.event.isPublished,
+            isAlreadyCheckedIn:
+              existingCheckIn?.status ===
+                "CHECKED_IN" ||
+              lockedTicket.isScanned ||
+              Boolean(
+                lockedTicket.checkedInAt,
+              ),
+          });
+
+        if (!eligibility.canCheckIn) {
+          /*
+           * "VALID" adalah hasil eligibility, bukan
+           * TicketScanResult. VALID tidak pernah dicatat
+           * sebagai scan failure; hanya hasil invalid
+           * yang dicatat ke TicketScan.
+           */
+          const scanResult =
+            eligibility.result === "VALID"
+              ? "INVALID"
+              : eligibility.result;
+
           await tx.ticketScan.create({
             data: {
-              ticketId: lockedTicket.id,
-              eventId: lockedTicket.eventId,
+              ticketId:
+                lockedTicket.id,
+              eventId:
+                lockedTicket.eventId,
               scannedById: user.id,
-              result: "ALREADY_USED",
+              result: scanResult,
               deviceId,
-              message: "Ticket sudah melakukan check-in.",
+              message:
+                eligibility.error ??
+                "Check-in tidak diperbolehkan.",
             },
           });
 
           return {
             success: false as const,
-            result: "ALREADY_USED" as const,
+            result:
+              eligibility.result,
             statusCode: 409,
-            ticketId: lockedTicket.id,
-            eventId: lockedTicket.eventId,
-            eventTitle: lockedTicket.event.title,
+            ticketId:
+              lockedTicket.id,
+            eventId:
+              lockedTicket.eventId,
+            eventTitle:
+              lockedTicket.event.title,
             participantName:
-              lockedTicket.participant?.fullName ??
-              lockedTicket.order?.fullName ??
+              lockedTicket.participant
+                ?.fullName ??
+              lockedTicket.order
+                ?.fullName ??
               "Peserta",
-            category: lockedTicket.category.name,
+            category:
+              lockedTicket.category.name,
             racepackClaimed:
-              lockedTicket.order?.isClaimed ?? false,
+              lockedTicket.order
+                ?.isClaimed ?? false,
             checkedInAt:
               existingCheckIn?.checkedInAt ??
               lockedTicket.checkedInAt ??
               null,
-          };
-        }
-
-        if (
-          lockedTicket.status === "CANCELLED" ||
-          lockedTicket.status === "REFUNDED"
-        ) {
-          await tx.ticketScan.create({
-            data: {
-              ticketId: lockedTicket.id,
-              eventId: lockedTicket.eventId,
-              scannedById: user.id,
-              result: "CANCELLED",
-              deviceId,
-              message: "Ticket sudah dibatalkan.",
-            },
-          });
-
-          return {
-            success: false as const,
-            result: "CANCELLED" as const,
-            statusCode: 409,
-            ticketId: lockedTicket.id,
-            error: "Tiket sudah dibatalkan atau direfund.",
-          };
-        }
-
-        if (lockedTicket.status === "EXPIRED") {
-          await tx.ticketScan.create({
-            data: {
-              ticketId: lockedTicket.id,
-              eventId: lockedTicket.eventId,
-              scannedById: user.id,
-              result: "EXPIRED",
-              deviceId,
-              message: "Ticket sudah expired.",
-            },
-          });
-
-          return {
-            success: false as const,
-            result: "EXPIRED" as const,
-            statusCode: 409,
-            ticketId: lockedTicket.id,
-            error: "Tiket sudah expired.",
-          };
-        }
-
-        if (lockedTicket.status !== "ACTIVE") {
-          await tx.ticketScan.create({
-            data: {
-              ticketId: lockedTicket.id,
-              eventId: lockedTicket.eventId,
-              scannedById: user.id,
-              result: "INVALID",
-              deviceId,
-              message:
-                "Status tiket belum memungkinkan untuk check-in.",
-            },
-          });
-
-          return {
-            success: false as const,
-            result: "INVALID" as const,
-            statusCode: 409,
-            ticketId: lockedTicket.id,
             error:
-              "Tiket belum aktif dan belum dapat digunakan untuk check-in.",
-          };
-        }
-
-        if (
-          lockedTicket.event.status !== "PUBLISHED" ||
-          !lockedTicket.event.isPublished
-        ) {
-          await tx.ticketScan.create({
-            data: {
-              ticketId: lockedTicket.id,
-              eventId: lockedTicket.eventId,
-              scannedById: user.id,
-              result: "INVALID",
-              deviceId,
-              message: "Event belum aktif untuk check-in.",
-            },
-          });
-
-          return {
-            success: false as const,
-            result: "INVALID" as const,
-            statusCode: 409,
-            ticketId: lockedTicket.id,
-            error:
-              "Event belum aktif untuk proses check-in.",
+              eligibility.error ??
+              "Check-in tidak diperbolehkan.",
           };
         }
 

@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { authorizationErrorResponse } from "@/lib/auth/authorization";
 import { requireEventPermission } from "@/lib/auth/organization";
+import { evaluateCheckInEligibility } from "@/lib/checkin/rules";
 
 export async function GET(request: Request) {
   try {
@@ -101,11 +102,14 @@ export async function GET(request: Request) {
       ticket.isScanned ||
       ticket.checkedInAt !== null;
 
-    const canCheckIn =
-      ticket.status === "ACTIVE" &&
-      ticket.event.status === "PUBLISHED" &&
-      ticket.event.isPublished &&
-      !isAlreadyCheckedIn;
+    const eligibility =
+      evaluateCheckInEligibility({
+        ticketStatus: ticket.status,
+        eventStatus: ticket.event.status,
+        eventIsPublished:
+          ticket.event.isPublished,
+        isAlreadyCheckedIn,
+      });
 
     return NextResponse.json({
       success: true,
@@ -136,9 +140,15 @@ export async function GET(request: Request) {
           ticket.checkedInAt ??
           null,
 
-        racepackClaimed: ticket.order?.isClaimed ?? false,
+        racepackClaimed:
+          ticket.order?.isClaimed ?? false,
 
-        canCheckIn,
+        canCheckIn:
+          eligibility.canCheckIn,
+        validationResult:
+          eligibility.result,
+        validationError:
+          eligibility.error ?? null,
       },
     });
   } catch (error: unknown) {

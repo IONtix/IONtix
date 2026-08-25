@@ -7,35 +7,13 @@ import {
   requireAuth,
 } from "@/lib/auth/authorization";
 import { requireEventPermission } from "@/lib/auth/organization";
+import {
+  assertOrderClaimAccess,
+} from "@/lib/order/authorization";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
 };
-
-async function assertOrderClaimAccess(
-  orderEmail: string | null,
-  eventId: string,
-) {
-  const user = await requireAuth();
-
-  try {
-    await requireEventPermission(
-      eventId,
-      "participants.manage",
-    );
-    return user;
-  } catch (error) {
-    if (
-      error instanceof AuthorizationError &&
-      orderEmail &&
-      user.email.toLowerCase() === orderEmail.toLowerCase()
-    ) {
-      return user;
-    }
-
-    throw error;
-  }
-}
 
 export async function POST(_request: Request, { params }: RouteContext) {
   try {
@@ -54,6 +32,7 @@ export async function POST(_request: Request, { params }: RouteContext) {
       where: { id },
       select: {
         id: true,
+        buyerUserId: true,
         email: true,
         isClaimed: true,
         ticketCategory: {
@@ -80,7 +59,42 @@ export async function POST(_request: Request, { params }: RouteContext) {
       );
     }
 
-    await assertOrderClaimAccess(order.email, order.ticketCategory.eventId);
+    const user =
+      await requireAuth();
+
+    let eventPermissionGranted =
+      false;
+
+    try {
+      await requireEventPermission(
+        order.ticketCategory.eventId,
+        "participants.manage",
+      );
+
+      eventPermissionGranted =
+        true;
+    } catch (error) {
+      if (
+        !(
+          error instanceof
+          AuthorizationError
+        )
+      ) {
+        throw error;
+      }
+    }
+
+    assertOrderClaimAccess({
+      currentUserId:
+        user.id,
+      currentUserEmail:
+        user.email,
+      buyerUserId:
+        order.buyerUserId,
+      orderEmail:
+        order.email,
+      eventPermissionGranted,
+    });
 
     if (order.isClaimed) {
       return NextResponse.json(

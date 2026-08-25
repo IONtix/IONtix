@@ -8,17 +8,28 @@ import { paymentService, PaymentProviderError } from "@/lib/payment";
 import { registerPaymentProviders } from "@/lib/payment/providers";
 
 import { confirmPayment } from "@/lib/payment/confirmation";
+import {
+  isIontixTestHttpEnabled,
+} from "@/lib/payment/test-mode";
+
+import {
+  verifyIontixTestCapability,
+} from "@/lib/payment/test-capability";
 
 export async function POST(request: Request) {
   try {
     /*
-     * Endpoint ini khusus development/sandbox.
+     * Endpoint HTTP IONTIX_TEST harus diaktifkan secara
+     * eksplisit. NODE_ENV non-production saja tidak cukup
+     * karena preview/staging dapat tetap publicly accessible.
      */
-    if (process.env.NODE_ENV === "production") {
+    if (
+      !isIontixTestHttpEnabled()
+    ) {
       return NextResponse.json(
         {
           error:
-            "IONTIX_TEST payment confirmation tidak tersedia di production.",
+            "IONTIX_TEST HTTP endpoint tidak diaktifkan.",
         },
         { status: 404 },
       );
@@ -29,6 +40,7 @@ export async function POST(request: Request) {
     const body = (await request.json()) as {
       provider?: unknown;
       externalId?: unknown;
+      capability?: unknown;
       status?: unknown;
       providerTransactionId?: unknown;
       amount?: unknown;
@@ -41,23 +53,50 @@ export async function POST(request: Request) {
       typeof body.provider === "string" ? body.provider.trim() : "IONTIX_TEST";
 
     const externalId =
-      typeof body.externalId === "string" ? body.externalId.trim() : "";
+      typeof body.externalId === "string"
+        ? body.externalId.trim()
+        : "";
 
-    const requestedStatus = typeof body.status === "string" ? body.status : "";
+    const capability =
+      typeof body.capability === "string"
+        ? body.capability.trim()
+        : "";
+
+    const requestedStatus =
+      typeof body.status === "string"
+        ? body.status
+        : "";
+
+    if (!externalId) {
+      return NextResponse.json(
+        {
+          error:
+            "externalId wajib diisi.",
+        },
+        { status: 400 },
+      );
+    }
+
+    if (
+      !capability ||
+      !verifyIontixTestCapability(
+        capability,
+        externalId,
+      )
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Sandbox capability tidak valid.",
+        },
+        { status: 403 },
+      );
+    }
 
     const amount = typeof body.amount === "number" ? body.amount : undefined;
 
     const currency =
       typeof body.currency === "string" ? body.currency : undefined;
-
-    if (!externalId) {
-      return NextResponse.json(
-        {
-          error: "externalId wajib diisi.",
-        },
-        { status: 400 },
-      );
-    }
 
     /*
      * Untuk test provider mismatch, provider harus

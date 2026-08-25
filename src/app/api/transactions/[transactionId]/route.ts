@@ -82,9 +82,6 @@ export async function GET(
               isClaimed: true,
               expiresAt: true,
               paidAt: true,
-              cancelledAt: true,
-              createdAt: true,
-              updatedAt: true,
 
               event: {
                 select: {
@@ -113,13 +110,9 @@ export async function GET(
               provider: true,
               method: true,
               status: true,
-              amount: true,
-              currency: true,
               providerTransactionId: true,
               paidAt: true,
-              expiresAt: true,
               createdAt: true,
-              updatedAt: true,
             },
           },
 
@@ -489,9 +482,6 @@ export async function GET(
                 email:
                   transaction.order
                     .email,
-                phone:
-                  transaction.order
-                    .phone,
               }
             : transaction.runner
               ? {
@@ -505,13 +495,8 @@ export async function GET(
                 }
               : null,
 
-        participant:
-          transaction.order
-            ?.participant ?? null,
-
         order: transaction.order
           ? {
-              id: transaction.order.id,
               orderNumber:
                 transaction.order
                   .orderNumber,
@@ -532,35 +517,14 @@ export async function GET(
               totalPrice:
                 transaction.order
                   .totalPrice,
-              currency:
-                transaction.order.currency,
               isClaimed:
                 transaction.order
                   .isClaimed,
-              expiresAt:
-                transaction.order
-                  .expiresAt,
-              paidAt:
-                transaction.order
-                  .paidAt,
-              cancelledAt:
-                transaction.order
-                  .cancelledAt,
-              createdAt:
-                transaction.order
-                  .createdAt,
-              updatedAt:
-                transaction.order
-                  .updatedAt,
             }
           : null,
 
         payment: transaction.payment
           ? {
-              id: transaction.payment.id,
-              externalId:
-                transaction.payment
-                  .externalId,
               provider:
                 transaction.payment
                   .provider,
@@ -570,27 +534,12 @@ export async function GET(
               status:
                 transaction.payment
                   .status,
-              amount:
-                transaction.payment
-                  .amount,
-              currency:
-                transaction.payment
-                  .currency,
               providerTransactionId:
                 transaction.payment
                   .providerTransactionId,
               paidAt:
                 transaction.payment
                   .paidAt,
-              expiresAt:
-                transaction.payment
-                  .expiresAt,
-              createdAt:
-                transaction.payment
-                  .createdAt,
-              updatedAt:
-                transaction.payment
-                  .updatedAt,
             }
           : null,
 

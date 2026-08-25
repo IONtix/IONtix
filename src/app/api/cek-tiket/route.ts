@@ -1,15 +1,23 @@
 import { NextResponse } from "next/server";
 
 import prisma from "@/lib/prisma";
+import {
+  checkTicketLookupRateLimit,
+} from "@/lib/security/ticket-lookup-rate-limit";
 
-export async function POST(req: Request) {
+export async function POST(
+  req: Request,
+) {
   try {
-    const body = (await req.json()) as {
-      email?: unknown;
-    };
+    const body =
+      (await req.json()) as {
+        email?: unknown;
+      };
 
     const email =
-      typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+      typeof body.email === "string"
+        ? body.email.trim().toLowerCase()
+        : "";
 
     if (!email) {
       return NextResponse.json(
@@ -20,66 +28,91 @@ export async function POST(req: Request) {
       );
     }
 
-    /*
-     * Endpoint ini memang ditujukan untuk fitur publik
-     * "Cek Tiket". Karena itu response dibatasi hanya
-     * informasi yang diperlukan untuk menemukan tiket.
-     *
-     * Jangan mengembalikan password, transaction object
-     * lengkap, atau relasi database yang tidak dibutuhkan.
-     */
-    const orders = await prisma.order.findMany({
-      where: {
+    const rateLimitResult =
+      await checkTicketLookupRateLimit({
         email,
-      },
-      select: {
-        id: true,
-        fullName: true,
-        email: true,
-        phone: true,
-        jerseySize: true,
-        isClaimed: true,
-        approvalStatus: true,
-        createdAt: true,
-        ticketCategory: {
-          select: {
-            id: true,
-            name: true,
-            event: {
-              select: {
-                id: true,
-                title: true,
-                date: true,
-                endDate: true,
-                location: true,
-                isPublished: true,
-                status: true,
-              },
+        headers: req.headers,
+      });
+
+    if (
+      !rateLimitResult.allowed
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Terlalu banyak permintaan. Silakan coba lagi nanti.",
+        },
+        { status: 429 },
+      );
+    }
+
+    const orders =
+      await prisma.order.findMany({
+        where: {
+          email,
+          status: "PAID",
+          tickets: {
+            some: {
+              status: "ACTIVE",
             },
           },
         },
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
-    });
+        select: {
+          id: true,
+          fullName: true,
+          jerseySize: true,
 
-    /*
-     * Jangan mengembalikan order yang tidak lagi terhubung
-     * ke event aktif/published ke endpoint publik.
-     */
-    const visibleOrders = orders.filter((order) => {
-      const event = order.ticketCategory?.event;
+          ticketCategory: {
+            select: {
+              name: true,
 
-      return Boolean(
-        event && event.isPublished && event.status === "PUBLISHED",
-      );
-    });
+              event: {
+                select: {
+                  title: true,
+                  isPublished: true,
+                  status: true,
+                },
+              },
+            },
+          },
+
+          tickets: {
+            where: {
+              status: "ACTIVE",
+            },
+            select: {
+              id: true,
+              ticketNumber: true,
+              status: true,
+            },
+            orderBy: {
+              createdAt: "asc",
+            },
+          },
+        },
+
+        orderBy: {
+          createdAt: "desc",
+        },
+      });
+
+    const visibleOrders =
+      orders.filter((order) => {
+        const event =
+          order.ticketCategory?.event;
+
+        return Boolean(
+          event &&
+            event.isPublished &&
+            event.status === "PUBLISHED",
+        );
+      });
 
     if (visibleOrders.length === 0) {
       return NextResponse.json(
         {
-          error: "Tiket tidak ditemukan untuk email ini.",
+          error:
+            "Tiket aktif tidak ditemukan untuk email ini.",
         },
         { status: 404 },
       );
@@ -92,11 +125,15 @@ export async function POST(req: Request) {
       { status: 200 },
     );
   } catch (error: unknown) {
-    console.error("POST /api/cek-tiket error:", error);
+    console.error(
+      "POST /api/cek-tiket error:",
+      error,
+    );
 
     return NextResponse.json(
       {
-        error: "Terjadi kesalahan sistem",
+        error:
+          "Terjadi kesalahan sistem",
       },
       { status: 500 },
     );

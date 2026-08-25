@@ -15,6 +15,10 @@ import {
 
 import type { CheckoutOrderResponse } from "@/lib/platform-types";
 
+import {
+  ROLE_NAMES,
+} from "@/lib/admin/role-policy";
+
 import { paymentService } from "@/lib/payment";
 import { registerPaymentProviders } from "@/lib/payment/providers";
 
@@ -38,7 +42,13 @@ interface CheckoutPayload {
   }>;
 }
 
-const PAYMENT_PROVIDER = "IONTIX_TEST" as const;
+const PAYMENT_PROVIDER =
+  (
+    process.env.IONTIX_PAYMENT_PROVIDER ??
+    "IONTIX_TEST"
+  ).trim().toUpperCase() as
+    | "IONTIX_TEST"
+    | "MIDTRANS";
 
 const ALLOWED_PAYMENT_METHODS = new Map<string, PaymentMethod>([
   ["qris", PaymentMethod.QRIS],
@@ -109,7 +119,18 @@ interface PreparedOrder {
   amount: number;
   externalId: string;
   transactionId: string;
+  paymentItems: {
+    id: string;
+    name: string;
+    quantity: number;
+    unitPrice: number;
+    totalPrice: number;
+  }[];
 }
+
+import {
+  reconcileExpiredPayments,
+} from "@/lib/payment/reconciliation";
 
 export async function processCheckout(
   payload: CheckoutPayload,
@@ -145,6 +166,16 @@ export async function processCheckout(
     const paymentMethod = getPaymentMethod(payload.paymentMethod);
 
     const now = new Date();
+
+    /*
+     * Lepaskan state pembayaran yang sudah expired
+     * sebelum checkout baru diproses.
+     *
+     * Operasi ini idempotent:
+     * hanya PENDING/PAYMENT_PROCESSING yang
+     * sudah melewati expiresAt yang disentuh.
+     */
+    await reconcileExpiredPayments(now);
 
     /*
      * Phase C:
@@ -277,20 +308,45 @@ export async function processCheckout(
             throw new Error("Kategori tiket tidak ditemukan.");
           }
 
-          const soldCount = await tx.order.count({
-            where: {
-              ticketCategoryId: categoryId,
-              status: {
-                in: [
-                  OrderStatus.PENDING_PAYMENT,
-                  OrderStatus.PAYMENT_PROCESSING,
-                  OrderStatus.PAID,
+          const soldCount =
+            await tx.order.count({
+              where: {
+                ticketCategoryId:
+                  categoryId,
+
+                OR: [
+                  {
+                    status:
+                      OrderStatus.PAID,
+                  },
+                  {
+                    status: {
+                      in: [
+                        OrderStatus.PENDING_PAYMENT,
+                        OrderStatus.PAYMENT_PROCESSING,
+                      ],
+                    },
+                    OR: [
+                      {
+                        expiresAt:
+                          null,
+                      },
+                      {
+                        expiresAt: {
+                          gt: now,
+                        },
+                      },
+                    ],
+                  },
                 ],
               },
-            },
-          });
+            });
 
-          if (soldCount + requestedCount > category.capacity) {
+          if (
+            soldCount +
+              requestedCount >
+            category.capacity
+          ) {
             throw new Error(
               `Maaf, kuota untuk tiket ${category.name} tidak mencukupi.`,
             );
@@ -479,32 +535,39 @@ export async function processCheckout(
               12,
             );
 
-            const pesertaRole = await tx.role.findUnique({
-              where: {
-                name: "PESERTA",
-              },
-              select: {
-                id: true,
-              },
-            });
+            const participantRole =
+              await tx.role.findUnique({
+                where: {
+                  name:
+                    ROLE_NAMES.PARTICIPANT,
+                },
+                select: {
+                  id: true,
+                },
+              });
 
-            if (!pesertaRole) {
-              throw new Error("Role PESERTA belum tersedia di database.");
+            if (!participantRole) {
+              throw new Error(
+                "Role PARTICIPANT belum tersedia di database.",
+              );
             }
 
-            user = await tx.user.create({
-              data: {
-                name: fullName,
-                email,
-                phone,
-                password: passwordHash,
-                role: {
-                  connect: {
-                    id: pesertaRole.id,
+            user =
+              await tx.user.create({
+                data: {
+                  name: fullName,
+                  email,
+                  phone,
+                  password:
+                    passwordHash,
+                  role: {
+                    connect: {
+                      id:
+                        participantRole.id,
+                    },
                   },
                 },
-              },
-            });
+              });
           }
 
           if (user.isDeleted || user.status !== "ACTIVE") {
@@ -658,6 +721,15 @@ export async function processCheckout(
             amount: newOrder.totalPrice,
             externalId,
             transactionId: transaction.id,
+            paymentItems: [
+              {
+                id: category.id,
+                name: category.name,
+                quantity: 1,
+                unitPrice: category.price,
+                totalPrice: category.price,
+              },
+            ],
           });
         }
 
@@ -699,9 +771,10 @@ export async function processCheckout(
             email: user?.email ?? item.email,
             phone: user?.phone ?? null,
           },
+          items: item.paymentItems,
           expiresAt: new Date(Date.now() + 30 * 60 * 1000),
           metadata: {
-            mode: "development",
+            source: "IONtix",
           },
         });
 
@@ -730,7 +803,6 @@ export async function processCheckout(
           orderId: item.orderId,
           externalId: item.externalId,
           checkoutUrl: session.checkoutUrl ?? null,
-          token: session.token ?? null,
           status: session.status,
         };
       }),

@@ -25,11 +25,13 @@ export default function ForgotPasswordPage() {
     const data = await res.json();
     setLoading(false);
 
-    if (data.resetToken) {
-      // Langsung arahkan ke halaman reset dengan token
-      router.push(`/reset-password?token=${data.resetToken}`);
+    if (data.resetUrl) {
+      router.push(data.resetUrl);
     } else {
-      setMessage("Jika email terdaftar, instruksi reset telah dikirim.");
+      setMessage(
+        data.message ||
+          "Jika email terdaftar, instruksi reset telah dikirim.",
+      );
     }
   }
 

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 interface TestPaymentActionsProps {
   externalId: string;
+  capability: string;
   amount: number;
   currency: string;
   initialStatus: string;
@@ -14,6 +15,7 @@ type PaymentActionStatus = "SUCCESS" | "FAILED" | "EXPIRED";
 
 export default function TestPaymentActions({
   externalId,
+  capability,
   amount,
   currency,
   initialStatus,
@@ -46,8 +48,10 @@ export default function TestPaymentActions({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          provider: "IONTIX_TEST",
+          provider:
+            "IONTIX_TEST",
           externalId,
+          capability,
           status: nextStatus,
           amount,
           currency,

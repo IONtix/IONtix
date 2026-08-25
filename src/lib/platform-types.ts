@@ -115,7 +115,6 @@ export interface CheckoutPaymentSession {
   orderId: string;
   externalId: string;
   checkoutUrl: string | null;
-  token: string | null;
   status: string;
   expiresAt?: DateLike | null;
 }
@@ -150,6 +149,11 @@ export interface TicketOrderLookup {
       title: string;
     };
   };
+  tickets: {
+    id: string;
+    ticketNumber: string;
+    status: string;
+  }[];
 }
 
 export interface OrderAddonRow {

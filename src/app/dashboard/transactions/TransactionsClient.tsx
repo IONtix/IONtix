@@ -42,7 +42,6 @@ interface TransactionItem {
     customer: {
       fullName: string;
       email: string;
-      phone: string;
     };
 
     event: {
@@ -50,26 +49,14 @@ interface TransactionItem {
       title: string;
     };
 
-    participant: {
-      id: string;
-      fullName: string;
-      email: string;
-    } | null;
   } | null;
 
   payment: {
-    id: string;
-    externalId: string;
     provider: string;
     method: string | null;
     status: string;
-    amount: number;
     currency: string;
-    providerTransactionId: string | null;
     paidAt: string | null;
-    expiresAt: string | null;
-    createdAt: string;
-    updatedAt: string;
   } | null;
 
   runner: {

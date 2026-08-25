@@ -3,7 +3,10 @@ import prisma from "@/lib/prisma";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { requireAuth } from "@/lib/auth/authorization";
 import DownloadActions from "./DownloadActions";
+import TransferTicketDialog from "./TransferTicketDialog";
+import { userOwnsTicket } from "@/lib/ticket/ownership";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +16,8 @@ export default async function TicketPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+
+  const user = await requireAuth();
 
   const ticket = await prisma.ticket.findUnique({
     where: { id },
@@ -36,6 +41,27 @@ export default async function TicketPage({
     notFound();
   }
 
+  /*
+   * Canonical ownership:
+   * - userId menjadi sumber utama ownership.
+   * - fallback email hanya untuk legacy ticket yang
+   *   belum memiliki userId.
+   */
+  const ownsTicket =
+    userOwnsTicket({
+      currentUserId: user.id,
+      currentUserEmail: user.email,
+      ticketOwnerId: ticket.userId,
+      ticketOwnerEmail:
+        ticket.user?.email ??
+        ticket.participant?.email ??
+        null,
+    });
+
+  if (!ownsTicket) {
+    notFound();
+  }
+
   const event = ticket.category.event;
 
   const formattedDate = new Date(event.date).toLocaleDateString("id-ID", {
@@ -45,7 +71,22 @@ export default async function TicketPage({
     year: "numeric",
   });
 
-  const shortCode = ticket.qrCode.split("-").slice(0, 2).join("-");
+  const shortCode =
+    ticket.qrCode.split("-").slice(0, 2).join("-");
+
+  const isTicketActive =
+    ticket.status === "ACTIVE";
+
+  const ticketStatusLabel =
+    ticket.status === "ACTIVE"
+      ? "VALID"
+      : ticket.status === "USED"
+        ? "SUDAH CHECK-IN"
+        : ticket.status === "CANCELLED"
+          ? "DIBATALKAN"
+          : ticket.status === "EXPIRED"
+            ? "EXPIRED"
+            : ticket.status;
 
   const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(
     ticket.qrCode,
@@ -180,7 +221,7 @@ export default async function TicketPage({
               </p>
 
               <span className="mt-1 inline-block rounded border border-emerald-400/20 bg-emerald-400/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-emerald-400">
-                VALID
+                {ticketStatusLabel}
               </span>
             </div>
           </div>
@@ -199,13 +240,22 @@ export default async function TicketPage({
             <p className="text-[10px] font-black uppercase tracking-[0.25em] text-amber-400">
               SECURE QR ACCESS
             </p>
+
             <p className="mt-0.5 text-[9px] font-medium uppercase tracking-wider text-slate-400 sm:text-[10px]">
-              Tunjukkan QR Code ini kepada panitia saat registrasi
+              {isTicketActive
+                ? "Tunjukkan QR Code ini kepada panitia saat registrasi"
+                : "QR Code ini tidak lagi dapat digunakan untuk check-in"}
             </p>
           </div>
 
           {/* QR Code Container */}
-          <div className="rounded-2xl border-2 border-amber-400/30 bg-white p-3.5 shadow-xl">
+          <div
+            className={`rounded-2xl border-2 p-3.5 shadow-xl ${
+              isTicketActive
+                ? "border-amber-400/30 bg-white"
+                : "border-slate-700 bg-slate-900 opacity-60"
+            }`}
+          >
             <Image
               src={qrCodeUrl}
               alt="QR Code"
@@ -238,6 +288,12 @@ export default async function TicketPage({
       {/* ACTION BUTTONS */}
       <div className="z-10 mt-5 flex w-full max-w-90 flex-col space-y-2.5 sm:max-w-md">
         <DownloadActions ticketId={ticket.id} />
+
+        {isTicketActive && (
+          <TransferTicketDialog
+            ticketId={ticket.id}
+          />
+        )}
 
         <Link href="/" className="w-full">
           <Button
