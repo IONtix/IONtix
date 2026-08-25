@@ -295,68 +295,67 @@ async function seedRoles() {
 
 async function seedUsers(
   superAdminRoleId: string,
-  eventOrganizerRoleId: string,
 ) {
+  const adminEmail =
+    process.env.IONTIX_SEED_ADMIN_EMAIL?.trim();
+
   const adminPassword =
-    process.env.IONTIX_SEED_ADMIN_PASSWORD ?? "CHANGE-ME-IMMEDIATELY";
+    process.env.IONTIX_SEED_ADMIN_PASSWORD;
 
-  const adminEmail = process.env.IONTIX_SEED_ADMIN_EMAIL ?? "admin@iontix.com";
+  if (!adminEmail) {
+    throw new Error(
+      "IONTIX_SEED_ADMIN_EMAIL wajib diisi untuk production seed.",
+    );
+  }
 
-  const hashedAdminPassword = await bcrypt.hash(adminPassword, 12);
+  if (!adminPassword) {
+    throw new Error(
+      "IONTIX_SEED_ADMIN_PASSWORD wajib diisi untuk production seed.",
+    );
+  }
 
-  const adminUser = await prisma.user.upsert({
-    where: {
-      email: adminEmail,
-    },
-    update: {
-      roleId: superAdminRoleId,
-      password: hashedAdminPassword,
-      status: "ACTIVE",
-      isDeleted: false,
-    },
-    create: {
-      name: "Super Admin IONtix",
-      email: adminEmail,
-      password: hashedAdminPassword,
-      roleId: superAdminRoleId,
-      status: "ACTIVE",
-    },
-  });
+  if (adminPassword.length < 12) {
+    throw new Error(
+      "IONTIX_SEED_ADMIN_PASSWORD minimal 12 karakter.",
+    );
+  }
 
-  const eventOrganizerPassword =
-    process.env.IONTIX_SEED_EO_PASSWORD ?? "CHANGE-ME-IMMEDIATELY";
+  const hashedAdminPassword =
+    await bcrypt.hash(
+      adminPassword,
+      12,
+    );
 
-  const eventOrganizerEmail =
-    process.env.IONTIX_SEED_EO_EMAIL ?? "eo.demo@iontix.com";
+  const adminUser =
+    await prisma.user.upsert({
+      where: {
+        email: adminEmail,
+      },
+      update: {
+        roleId:
+          superAdminRoleId,
+        password:
+          hashedAdminPassword,
+        status:
+          "ACTIVE",
+        isDeleted:
+          false,
+      },
+      create: {
+        name:
+          "Super Admin IONtix",
+        email:
+          adminEmail,
+        password:
+          hashedAdminPassword,
+        roleId:
+          superAdminRoleId,
+        status:
+          "ACTIVE",
+      },
+    });
 
-  const hashedEventOrganizerPassword = await bcrypt.hash(
-    eventOrganizerPassword,
-    12,
-  );
-
-  const eventOrganizerUser = await prisma.user.upsert({
-    where: {
-      email: eventOrganizerEmail,
-    },
-    update: {
-      roleId: eventOrganizerRoleId,
-      password: hashedEventOrganizerPassword,
-      status: "ACTIVE",
-      isDeleted: false,
-    },
-    create: {
-      name: "IONtix Demo Organizer",
-      email: eventOrganizerEmail,
-      password: hashedEventOrganizerPassword,
-      roleId: eventOrganizerRoleId,
-      status: "ACTIVE",
-    },
-  });
-
-  return {
-    adminUser,
-    eventOrganizerUser,
-  };
+  return adminUser;
 }
 
 async function seedSports() {
@@ -371,21 +370,25 @@ async function seedSports() {
 
   const sports = [];
 
-  for (const [name, slug] of defaultSports) {
-    const sport = await prisma.sport.upsert({
-      where: {
-        slug,
-      },
-      update: {
-        name,
-        isActive: true,
-      },
-      create: {
-        name,
-        slug,
-        isActive: true,
-      },
-    });
+  for (
+    const [name, slug]
+    of defaultSports
+  ) {
+    const sport =
+      await prisma.sport.upsert({
+        where: {
+          slug,
+        },
+        update: {
+          name,
+          isActive: true,
+        },
+        create: {
+          name,
+          slug,
+          isActive: true,
+        },
+      });
 
     sports.push(sport);
   }
@@ -393,236 +396,237 @@ async function seedSports() {
   return sports;
 }
 
-async function seedDemoOrganization(
-  eventOrganizerUserId: string,
-  eventOrganizerRoleId: string,
-) {
-  const organization = await prisma.organization.upsert({
-    where: {
-      slug: "iontix-demo",
-    },
-    update: {
-      name: "IONtix Demo Organizer",
-      email: "eo.demo@iontix.com",
-      phone: "081234567890",
-      status: "ACTIVE",
-      verifiedAt: new Date(),
-    },
-    create: {
-      name: "IONtix Demo Organizer",
-      slug: "iontix-demo",
-      legalName: "IONtix Demo Organizer",
-      email: "eo.demo@iontix.com",
-      phone: "081234567890",
-      website: "https://iontix.local",
-      description: "Organization demo untuk pengujian platform IONtix V2.",
-      status: "ACTIVE",
-      verifiedAt: new Date(),
-    },
-  });
-
-  await prisma.organizationMember.upsert({
-    where: {
-      organizationId_userId: {
-        organizationId: organization.id,
-        userId: eventOrganizerUserId,
-      },
-    },
-    update: {
-      roleId: eventOrganizerRoleId,
-      isOwner: true,
-      isActive: true,
-      title: "Owner",
-    },
-    create: {
-      organizationId: organization.id,
-      userId: eventOrganizerUserId,
-      roleId: eventOrganizerRoleId,
-      isOwner: true,
-      isActive: true,
-      title: "Owner",
-    },
-  });
-
-  return organization;
-}
-
-async function seedDemoEvent(organizationId: string, eventOrganizerUserId: string) {
+async function seedRunningRegistration() {
   const running = await prisma.sport.findUnique({
     where: {
       slug: "running",
     },
+    select: {
+      id: true,
+    },
   });
 
   if (!running) {
-    throw new Error("Sport Running belum tersedia.");
+    throw new Error(
+      "Sport Running belum tersedia.",
+    );
   }
 
-  const startDate = new Date("2026-10-17T06:00:00+07:00");
-
-  const endDate = new Date("2026-10-17T11:00:00+07:00");
-
-  const event = await prisma.event.upsert({
-    where: {
-      slug: "iontix-demo-run-2026",
-    },
-    update: {
-      organizationId,
-      eoId: eventOrganizerUserId,
-      sportId: running.id,
-      title: "IONtix Demo Run 2026",
-      description:
-        "Event demo resmi untuk menguji workflow event, checkout, payment, ticketing, dan check-in IONtix V2.",
-      date: startDate,
-      endDate,
-      timezone: "Asia/Jakarta",
-      location: "Jakarta Demo Venue",
-      mapsUrl: "https://maps.google.com/",
-      status: "PUBLISHED",
-      isPublished: true,
-      publishedAt: new Date(),
-    },
-    create: {
-      organizationId,
-      eoId: eventOrganizerUserId,
-      sportId: running.id,
-      title: "IONtix Demo Run 2026",
-      slug: "iontix-demo-run-2026",
-      description:
-        "Event demo resmi untuk menguji workflow event, checkout, payment, ticketing, dan check-in IONtix V2.",
-      date: startDate,
-      endDate,
-      timezone: "Asia/Jakarta",
-      location: "Jakarta Demo Venue",
-      mapsUrl: "https://maps.google.com/",
-      status: "PUBLISHED",
-      isPublished: true,
-      publishedAt: new Date(),
-    },
-  });
-
-  return event;
-}
-
-async function seedDemoTicketCategory(eventId: string) {
-  const category = await prisma.ticketCategory.findFirst({
-    where: {
-      eventId,
-      name: "5K General",
-    },
-  });
-
-  if (category) {
-    return prisma.ticketCategory.update({
+  const template =
+    await prisma.formTemplate.upsert({
       where: {
-        id: category.id,
+        sportId_slug: {
+          sportId: running.id,
+          slug: "running-registration",
+        },
       },
-      data: {
-        price: 150000,
-        capacity: 100,
-        requireApproval: false,
-        saleStartsAt: new Date("2026-08-16T00:00:00+07:00"),
-        saleEndsAt: new Date("2026-10-16T23:59:59+07:00"),
+      update: {
+        name:
+          "Running Registration",
+        description:
+          "Template registrasi standar untuk event running.",
+        isSystem: true,
         isActive: true,
-        sortOrder: 1,
-        description: "Kategori demo untuk pengujian checkout IONtix V2.",
+        allowEOEdit: true,
+      },
+      create: {
+        sportId: running.id,
+        name:
+          "Running Registration",
+        slug:
+          "running-registration",
+        description:
+          "Template registrasi standar untuk event running.",
+        isSystem: true,
+        isActive: true,
+        allowEOEdit: true,
+      },
+    });
+
+  const version =
+    await prisma.formVersion.upsert({
+      where: {
+        formTemplateId_version: {
+          formTemplateId:
+            template.id,
+          version: 1,
+        },
+      },
+      update: {
+        status: "PUBLISHED",
+        publishedAt:
+          new Date(
+            "2026-08-20T09:15:11.720Z",
+          ),
+      },
+      create: {
+        formTemplateId:
+          template.id,
+        version: 1,
+        status: "PUBLISHED",
+        publishedAt:
+          new Date(
+            "2026-08-20T09:15:11.720Z",
+          ),
+      },
+    });
+
+  const fields = [
+    {
+      key: "full_name",
+      label: "Nama Lengkap",
+      fieldType: "TEXT",
+      order: 10,
+      isRequired: true,
+      isSystem: true,
+      isEditableByEO: false,
+      isVisible: true,
+    },
+    {
+      key: "email",
+      label: "Email",
+      fieldType: "EMAIL",
+      order: 20,
+      isRequired: true,
+      isSystem: true,
+      isEditableByEO: false,
+      isVisible: true,
+    },
+    {
+      key: "phone",
+      label: "Nomor Telepon",
+      fieldType: "PHONE",
+      order: 30,
+      isRequired: true,
+      isSystem: true,
+      isEditableByEO: false,
+      isVisible: true,
+    },
+    {
+      key: "date_of_birth",
+      label: "Tanggal Lahir",
+      fieldType: "DATE",
+      order: 40,
+      isRequired: true,
+      isSystem: false,
+      isEditableByEO: true,
+      isVisible: true,
+    },
+    {
+      key: "gender",
+      label: "Jenis Kelamin",
+      fieldType: "GENDER",
+      order: 50,
+      isRequired: true,
+      isSystem: false,
+      isEditableByEO: true,
+      isVisible: true,
+    },
+    {
+      key: "emergency_contact",
+      label: "Kontak Darurat",
+      fieldType: "EMERGENCY_CONTACT",
+      order: 60,
+      isRequired: true,
+      isSystem: false,
+      isEditableByEO: true,
+      isVisible: true,
+    },
+  ] as const;
+
+  for (const field of fields) {
+    await prisma.formField.upsert({
+      where: {
+        formVersionId_key: {
+          formVersionId:
+            version.id,
+          key: field.key,
+        },
+      },
+      update: {
+        label: field.label,
+        fieldType: field.fieldType,
+        order: field.order,
+        isRequired: field.isRequired,
+        isSystem: field.isSystem,
+        isEditableByEO: field.isEditableByEO,
+        isVisible: field.isVisible,
+      },
+      create: {
+        formVersionId:
+          version.id,
+        key: field.key,
+        label: field.label,
+        fieldType: field.fieldType,
+        order: field.order,
+        isRequired: field.isRequired,
+        isSystem: field.isSystem,
+        isEditableByEO: field.isEditableByEO,
+        isVisible: field.isVisible,
       },
     });
   }
 
-  return prisma.ticketCategory.create({
-    data: {
-      eventId,
-      name: "5K General",
-      price: 150000,
-      capacity: 100,
-      requireApproval: false,
-      saleStartsAt: new Date("2026-08-16T00:00:00+07:00"),
-      saleEndsAt: new Date("2026-10-16T23:59:59+07:00"),
-      isActive: true,
-      sortOrder: 1,
-      description: "Kategori demo untuk pengujian checkout IONtix V2.",
-    },
-  });
-}
-
-async function seedDemoAddon(eventId: string) {
-  const existing = await prisma.addon.findFirst({
-    where: {
-      eventId,
-      name: "Official Race Jersey",
-    },
-  });
-
-  if (existing) {
-    return prisma.addon.update({
-      where: {
-        id: existing.id,
-      },
-      data: {
-        type: "MERCHANDISE",
-        price: 85000,
-        capacity: 100,
-        isActive: true,
-        description: "Add-on demo untuk pengujian checkout.",
-      },
-    });
-  }
-
-  return prisma.addon.create({
-    data: {
-      eventId,
-      type: "MERCHANDISE",
-      name: "Official Race Jersey",
-      price: 85000,
-      capacity: 100,
-      isActive: true,
-      description: "Add-on demo untuk pengujian checkout.",
-    },
-  });
+  return {
+    template,
+    version,
+  };
 }
 
 async function main() {
-  console.log("🌱 Starting IONtix V2 seed...");
-
-  const { superAdminRole, eventOrganizerRole } = await seedRoles();
-
-  const { adminUser, eventOrganizerUser } = await seedUsers(
-    superAdminRole.id,
-    eventOrganizerRole.id,
+  console.log(
+    "🌱 Starting IONtix production seed...",
   );
 
-  await seedSports();
+  const {
+    superAdminRole,
+  } = await seedRoles();
 
-  const organization = await seedDemoOrganization(eventOrganizerUser.id, eventOrganizerRole.id);
+  const adminUser =
+    await seedUsers(
+      superAdminRole.id,
+    );
 
-  const demoEvent = await seedDemoEvent(organization.id, eventOrganizerUser.id);
+  const sports =
+    await seedSports();
 
-  const demoCategory = await seedDemoTicketCategory(demoEvent.id);
-
-  const demoAddon = await seedDemoAddon(demoEvent.id);
+  const runningRegistration =
+    await seedRunningRegistration();
 
   console.log("");
-  console.log("✅ Seed complete.");
-  console.log(`✅ Super Admin: ${adminUser.email}`);
-  console.log(`✅ Event Organizer Demo: ${eventOrganizerUser.email}`);
-  console.log(`✅ Organization: ${organization.name}`);
-  console.log(`✅ Event: ${demoEvent.title}`);
-  console.log(`✅ Category: ${demoCategory.name} | Rp ${demoCategory.price}`);
-  console.log(`✅ Add-on: ${demoAddon.name} | Rp ${demoAddon.price}`);
+  console.log(
+    "✅ Production seed complete.",
+  );
+  console.log(
+    `✅ Super Admin: ${adminUser.email}`,
+  );
+  console.log(
+    `✅ Sports seeded: ${sports.length}`,
+  );
+  console.log(
+    `✅ Form template: ${runningRegistration.template.name}`,
+  );
+  console.log(
+    `✅ Form version: ${runningRegistration.version.version}`,
+  );
   console.log("");
-  console.log("⚠️ Gunakan password seed dari environment variables.");
-  console.log("   IONTIX_SEED_ADMIN_PASSWORD");
-  console.log("   IONTIX_SEED_EO_PASSWORD");
-  console.log("");
+  console.log(
+    "✅ Demo organization/event/payment data tidak dibuat.",
+  );
 }
 
 main()
   .catch((error) => {
-    console.error("❌ IONtix seed failed:", error);
-
+    console.error();
+    console.error(
+      error instanceof Error
+        ? error.message
+        : error,
+    );
     process.exitCode = 1;
   })
   .finally(async () => {
     await prisma.$disconnect();
   });
+
+export {};
